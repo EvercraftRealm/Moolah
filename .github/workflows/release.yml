@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and build add-on
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Raw -LiteralPath './Moolah BP/manifest.json' | ConvertFrom-Json
+          $version = $manifest.header.version -join '.'
+          if ($env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match manifest version $version"
+          }
+          ./scripts/build-release.ps1
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME ./dist/*.mcaddon --generate-notes --title "Moolah $env:GITHUB_REF_NAME"

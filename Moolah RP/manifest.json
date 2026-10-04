@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Moolah (RP) - Digitize your diamonds.",
+    "description": "An achievement-friendly player-driven economy for Minecraft Bedrock multiplayer. (Resources)",
+    "uuid": "f2f16a2e-2fab-49ec-89a6-324c02c5823b",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 110]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "453697af-e61e-4822-91d8-1298e0404bbe",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "f9f76e7b-bbdb-44b2-991c-af5f7eb5255a",
+      "version": [1, 0, 0]
+    }
+  ]
+}
+

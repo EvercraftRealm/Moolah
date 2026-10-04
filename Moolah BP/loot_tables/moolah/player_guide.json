@@ -1,0 +1,32 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:written_book",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "set_book_contents",
+              "author": "Moolah",
+              "title": "Moolah Guide",
+              "pages": [
+                "§lWelcome to Moolah!§r\n\nMoolah stores real diamond value digitally.\n\n1 diamond = 100 Moolah\n\nOpen the main menu with §l/bank§r or Use a diamond.",
+                "§lDeposit§r\n\nTurn inventory diamonds into Moolah.\n\n§l/deposit§r opens the menu.\n§l/deposit 1-1728§r deposits that many.\n§l/deposit 0§r deposits all.",
+                "§lWithdraw§r\n\nTurn Moolah back into diamonds.\n\n§l/withdraw§r opens the menu. Use 1-1728 or 0 for All to open a confirmation showing the total and any tax.",
+                "§lTransfers§r\n\nUse §l/pay§r to send Moolah. Payments stay Pending until accepted, so senders may cancel them.\n\nUse §l/inbox§r and §l/pending§r for shortcuts.",
+                "§lMail§r\n\nUse §l/mail§r to message online or offline players. Postage may apply.\n\nOpening mail accepts it. The sender may cancel it only while it is still unopened.",
+                "§lQuickPay Signs§r\n\nLine 1: !QuickPay\nLine 2: USERNAME\nLine 3: AMOUNT\nLine 4: DESCRIPTION\n\nUse a registered sign to create a payment. Always verify its details.",
+                "§lMarket§r\n\nUse §l/market§r to browse or manage listings.\n\n§l/buy§r opens browsing.\n§l/sell§r lists your held item.\n\nFees and taxes may apply.",
+                "§lWarp§r\n\nWhen enabled, use §l/warp§r to travel to a player, Spawn, or Home.\n\nDistance and dimension affect price. You always see a confirmation first.",
+                "§lHelpful Notes§r\n\nHold a diamond to see your balance. Use §l/taxes§r to check the Tax Pool and your next return.\n\nFeatures and fees depend on world settings. For conflicts, prefix commands with §lmoolah:§r."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
