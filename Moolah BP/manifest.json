@@ -4,8 +4,8 @@
     "name": "Moolah (BP) - Digitize your diamonds.",
     "description": "An achievement-friendly player-driven economy for Minecraft Bedrock multiplayer. (Behaviors)",
     "uuid": "f9f76e7b-bbdb-44b2-991c-af5f7eb5255a",
-    "version": [1, 0, 0],
-    "min_engine_version": [1, 21, 110]
+    "version": [1, 0, 1],
+    "min_engine_version": [1, 21, 120]
   },
   "metadata": {
     "product_type": "addon"
@@ -14,13 +14,13 @@
     {
       "type": "data",
       "uuid": "03509351-c04a-4071-8882-d65790975811",
-      "version": [1, 0, 0]
+      "version": [1, 0, 1]
     },
     {
       "type": "script",
       "language": "javascript",
       "uuid": "16a263e9-6844-4577-9176-b0833318e81d",
-      "version": [1, 0, 0],
+      "version": [1, 0, 1],
       "entry": "scripts/main.js"
     }
   ],
@@ -35,7 +35,7 @@
     },
     {
       "uuid": "f2f16a2e-2fab-49ec-89a6-324c02c5823b",
-      "version": [1, 0, 0]
+      "version": [1, 0, 1]
     }
   ]
 }

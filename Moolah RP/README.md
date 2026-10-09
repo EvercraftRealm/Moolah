@@ -206,7 +206,7 @@ Dedicated-server owners can grant additional admins from the server console with
 ## For world owners
 
 - This addon is achievement-friendly!
-- Minimum engine version: Minecraft Bedrock `1.21.110`
+- Minimum engine version: Minecraft Bedrock `1.21.120`
 - Script dependencies: `@minecraft/server` 2.1.0 and `@minecraft/server-ui` 2.0.0
 - Market items use persistent private storage entities and should not be removed with broad entity-cleanup commands.
 - Back up important worlds before updating or removing economy add-ons.

@@ -17,7 +17,7 @@ cheats.
    be available alongside it.
 4. Join the world and follow the Moolah Guide. Run `/bank` to open the menu.
 
-Moolah requires Minecraft Bedrock 1.21.110 or newer. Back up important worlds
+Moolah requires Minecraft Bedrock 1.21.120 or newer. Back up important worlds
 before installing or updating add-ons.
 
 ## Features
