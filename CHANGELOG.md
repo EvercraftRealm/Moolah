@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.3 - 2026-10-13
+## 1.2.0 - 2026-10-13
 
 - Added global guest access with optional 1–3650 day expiration.
 - Guests can use approved blocks, trade with villagers, and pick up items, but
