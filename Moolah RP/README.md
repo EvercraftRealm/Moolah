@@ -99,13 +99,15 @@ The **Claim Radius** menu supports radii 1 through 9 and shows the resulting squ
 - `/claim add <1-9>` buys a square radius centered on the current chunk. Radius 1 is 3×3; radius 9 is 19×19.
 - `/claim remove [1-9]` unclaims your chunks in the selected area after confirmation. Refunds are off by default and configurable by admins.
 - `/claim invite` opens an online-player dropdown with an **Offline Player** username fallback. Invitations apply to every chunk owned by the inviting player.
-- `/claim deinvite` opens a dropdown containing your currently invited friends.
+- `/claim uninvite` opens a dropdown containing your currently invited friends.
+- `/claim guest` opens the **Add Guest** menu. Guests can interact, trade, and pick up items across all your claims without building, breaking, or damaging entities. Guest duration is optional; blank means no expiration.
+- `/claim unguest` opens a dropdown containing your active guests.
 - `/claim toggle` opens the fire-tick and explosion controls for the current chunk.
 - `/claim info` shows the current chunk's owner, globally invited friends, and protection settings.
 - `/claim view` toggles claim-border particles across loaded simulation-distance chunks. Green borders are yours, red borders belong to other players, and grey borders are unclaimed; run the command again to exit.
 - `/claim walk` records each unique unclaimed chunk you enter. Crouch three separate times quickly to finish, then confirm the combined cost. Walk & Claim is limited to 512 selected chunks per session.
 
-Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Explosions do not destroy protected blocks. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.
+Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Guests may use approved doors, controls, containers, workstations, and villager trading, and may pick up dropped items, but cannot edit land or damage entities. Explosions do not destroy protected blocks. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.
 
 Entering or leaving a claimed area shows its owner in the actionbar. Moving between adjacent chunks owned by the same player does not repeat the message. Economy admins can remove another player's claims by standing in one and using the normal remove command; administrative removals never issue refunds.
 

@@ -1,5 +1,6 @@
 import {
   BlockVolume,
+  BlockTypes,
   CommandPermissionLevel,
   CustomCommandParamType,
   CustomCommandSource,
@@ -24,6 +25,30 @@ const FIRE_SLICE_HEIGHT = 32;
 const FIRE_TASKS_PER_TICK = 2;
 const FIRE_QUEUE_LIMIT = 2048;
 const MAX_FRIENDS = 64;
+const MAX_GUESTS = 64;
+const MAX_GUEST_DAYS = 3650;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const GUEST_SAFE_ENTITY_TYPES = new Set([
+  "minecraft:npc",
+  "minecraft:villager",
+  "minecraft:villager_v2",
+  "minecraft:wandering_trader",
+]);
+const GUEST_SAFE_BLOCK_TYPES = new Set([
+  "minecraft:anvil",
+  "minecraft:beacon",
+  "minecraft:bell",
+  "minecraft:cartography_table",
+  "minecraft:crafting_table",
+  "minecraft:enchanting_table",
+  "minecraft:grindstone",
+  "minecraft:heavy_weighted_pressure_plate",
+  "minecraft:jukebox",
+  "minecraft:light_weighted_pressure_plate",
+  "minecraft:loom",
+  "minecraft:smithing_table",
+  "minecraft:stonecutter_block",
+]);
 const CLAIM_VIEW_RADIUS_CHUNKS = 12;
 const CLAIM_VIEW_NEAR_RADIUS_CHUNKS = 2;
 const CLAIM_VIEW_MID_RADIUS_CHUNKS = 5;
@@ -211,6 +236,7 @@ function defaultProfile(ownerKey, ownerName = ownerKey) {
     ownerName,
     claimCount: 0,
     friends: [],
+    guests: [],
   };
 }
 
@@ -236,6 +262,25 @@ function sanitizeProfile(value, ownerKey, ownerName = ownerKey) {
       });
       if (profile.friends.length >= MAX_FRIENDS) break;
     }
+  }
+  if (Array.isArray(value.guests)) {
+    const seen = new Set();
+    for (const guest of value.guests) {
+      if (!guest || typeof guest.key !== "string" || !guest.key || seen.has(guest.key)) continue;
+      if (guest.expiresAt !== undefined && (!Number.isSafeInteger(guest.expiresAt) || guest.expiresAt <= 0)) continue;
+      seen.add(guest.key);
+      profile.guests.push({
+        key: guest.key,
+        name: typeof guest.name === "string" && guest.name ? guest.name : guest.key,
+        id: typeof guest.id === "string" ? guest.id : undefined,
+        expiresAt: guest.expiresAt,
+      });
+      if (profile.guests.length >= MAX_GUESTS) break;
+    }
+  }
+  if (profile.friends.length > 0 && profile.guests.length > 0) {
+    const friendKeys = new Set(profile.friends.map((friend) => friend.key));
+    profile.guests = profile.guests.filter((guest) => !friendKeys.has(guest.key));
   }
   return profile;
 }
@@ -276,14 +321,33 @@ function isOwner(player, claim) {
     || (typeof claim.ownerId === "string" && claim.ownerId === player.id);
 }
 
-function isAuthorized(player, claim) {
+function accessEntryMatchesPlayer(entry, player) {
+  return entry.key === normalizeName(player.name) || (entry.id && entry.id === player.id);
+}
+
+function isActiveGuest(guest, now = Date.now()) {
+  return guest.expiresAt === undefined || guest.expiresAt > now;
+}
+
+function hasEditAccess(player, claim) {
   if (!claim) return true;
   if (player.hasTag("econ_admin") || isOwner(player, claim)) return true;
 
-  const playerKey = normalizeName(player.name);
   return getProfile(claim.ownerKey, claim.ownerName).friends.some(
-    (friend) => friend.key === playerKey || (friend.id && friend.id === player.id),
+    (friend) => accessEntryMatchesPlayer(friend, player),
   );
+}
+
+function hasGuestAccess(player, claim) {
+  if (!claim) return false;
+  const now = Date.now();
+  return getProfile(claim.ownerKey, claim.ownerName).guests.some(
+    (guest) => isActiveGuest(guest, now) && accessEntryMatchesPlayer(guest, player),
+  );
+}
+
+function hasInteractAccess(player, claim) {
+  return hasEditAccess(player, claim) || hasGuestAccess(player, claim);
 }
 
 function getCurrencyObjective() {
@@ -690,6 +754,7 @@ function inviteFriend(player, username) {
   const nextProfile = {
     ...profile,
     ownerName: player.name,
+    guests: profile.guests.filter((guest) => guest.key !== targetKey),
     friends: [...profile.friends, {
       key: targetKey,
       name: onlineTarget?.name ?? targetName,
@@ -706,11 +771,11 @@ function inviteFriend(player, username) {
   }
 }
 
-function deinviteFriend(player, username) {
+function uninviteFriend(player, username) {
   const targetName = String(username ?? "").trim();
   const targetKey = normalizeName(targetName);
   if (!targetKey) {
-    player.sendMessage("Usage: /claim deinvite <username>");
+    player.sendMessage("Usage: /claim uninvite <username>");
     return;
   }
 
@@ -727,7 +792,7 @@ function deinviteFriend(player, username) {
     const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
     onlineTarget?.sendMessage(`${player.name} removed your access to all of their claimed chunks.`);
   } catch (error) {
-    console.error(`[Moolah Claims] Deinvite failed: ${error?.stack ?? error}`);
+    console.error(`[Moolah Claims] Uninvite failed: ${error?.stack ?? error}`);
     player.sendMessage("That claim permission change could not be saved.");
   }
 }
@@ -794,7 +859,7 @@ function openClaimInviteMenu(player, onBack) {
   }).catch(() => player.sendMessage("The claim invite menu could not be opened."));
 }
 
-function openClaimDeinviteMenu(player, onBack) {
+function openClaimUninviteMenu(player, onBack) {
   const { profile } = resolveOwnerProfile(player);
   if (profile.friends.length === 0) {
     player.sendMessage("You have not invited anyone to your claims.");
@@ -825,8 +890,205 @@ function openClaimDeinviteMenu(player, onBack) {
       player.sendMessage("The selected friend was invalid.");
       return;
     }
-    deinviteFriend(player, profile.friends[selectedIndex].name);
+    uninviteFriend(player, profile.friends[selectedIndex].name);
   }).catch(() => player.sendMessage("The claim access menu could not be opened."));
+}
+
+function parseGuestDuration(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return { valid: true, days: undefined, expiresAt: undefined };
+  if (!/^\d+$/.test(text)) return { valid: false };
+  const days = Number(text);
+  if (!Number.isSafeInteger(days) || days < 1 || days > MAX_GUEST_DAYS) return { valid: false };
+  return {
+    valid: true,
+    days,
+    expiresAt: Date.now() + days * MILLISECONDS_PER_DAY,
+  };
+}
+
+function guestDurationLabel(guest) {
+  if (guest.expiresAt === undefined) return "No expiration";
+  const days = Math.max(1, Math.ceil((guest.expiresAt - Date.now()) / MILLISECONDS_PER_DAY));
+  return `${days} day${days === 1 ? "" : "s"} left`;
+}
+
+function addGuest(player, username, durationValue) {
+  const targetName = String(username ?? "").trim();
+  const targetKey = normalizeName(targetName);
+  if (!targetKey) {
+    player.sendMessage("Enter a player name.");
+    return;
+  }
+
+  const duration = parseGuestDuration(durationValue);
+  if (!duration.valid) {
+    player.sendMessage(`Guest duration must be blank or a whole number from 1 to ${MAX_GUEST_DAYS} days.`);
+    return;
+  }
+
+  const { profile } = resolveOwnerProfile(player);
+  if (profile.claimCount <= 0) {
+    player.sendMessage("You need at least one claim before adding guests.");
+    return;
+  }
+  if (targetKey === normalizeName(player.name)) {
+    player.sendMessage("You already have access to your own claims.");
+    return;
+  }
+  if (profile.friends.some((friend) => friend.key === targetKey)) {
+    player.sendMessage(`${targetName} is already a friend and has full access to your claims.`);
+    return;
+  }
+
+  const existingGuest = profile.guests.find((guest) => guest.key === targetKey);
+  if (!existingGuest && profile.guests.filter((guest) => isActiveGuest(guest)).length >= MAX_GUESTS) {
+    player.sendMessage(`You cannot have more than ${MAX_GUESTS} active guests.`);
+    return;
+  }
+
+  const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
+  const guest = {
+    key: targetKey,
+    name: onlineTarget?.name ?? targetName,
+    id: onlineTarget?.id ?? existingGuest?.id,
+    expiresAt: duration.expiresAt,
+  };
+  try {
+    saveProfile({
+      ...profile,
+      ownerName: player.name,
+      guests: [
+        ...profile.guests.filter((entry) => entry.key !== targetKey && isActiveGuest(entry)),
+        guest,
+      ],
+    });
+    const durationText = duration.days === undefined
+      ? "with no expiration"
+      : `for ${duration.days} day${duration.days === 1 ? "" : "s"}`;
+    player.sendMessage(`${guest.name} is now a guest on all of your claims ${durationText}.`);
+    onlineTarget?.sendMessage(`${player.name} added you as an interaction-only guest on all of their claims ${durationText}.`);
+  } catch (error) {
+    console.error(`[Moolah Claims] Add guest failed: ${error?.stack ?? error}`);
+    player.sendMessage("That guest permission could not be saved.");
+  }
+}
+
+function removeGuest(player, username) {
+  const targetName = String(username ?? "").trim();
+  const targetKey = normalizeName(targetName);
+  const { profile } = resolveOwnerProfile(player);
+  const remaining = profile.guests.filter((guest) => guest.key !== targetKey);
+  if (remaining.length === profile.guests.length) {
+    player.sendMessage(`${targetName} is not a guest on your claims.`);
+    return;
+  }
+
+  try {
+    saveProfile({ ...profile, ownerName: player.name, guests: remaining });
+    player.sendMessage(`${targetName} is no longer a guest on your claims.`);
+    const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
+    onlineTarget?.sendMessage(`${player.name} removed your guest access to their claims.`);
+  } catch (error) {
+    console.error(`[Moolah Claims] Remove guest failed: ${error?.stack ?? error}`);
+    player.sendMessage("That guest permission change could not be saved.");
+  }
+}
+
+function openOfflineClaimGuest(player, durationValue, onBack) {
+  const form = new ModalFormData()
+    .title("Offline Guest")
+    .textField("Username", "Enter the player's exact name", { defaultValue: "" })
+    .textField("Duration in days (optional)", "Blank means no expiration", {
+      defaultValue: String(durationValue ?? ""),
+    })
+    .submitButton("Add Guest");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    addGuest(player, response.formValues?.[0], response.formValues?.[1]);
+  }).catch(() => player.sendMessage("The offline guest menu could not be opened."));
+}
+
+function openClaimGuestMenu(player, onBack) {
+  const { profile } = resolveOwnerProfile(player);
+  if (profile.claimCount <= 0) {
+    player.sendMessage("You need at least one claim before adding guests.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const friendKeys = new Set(profile.friends.map((friend) => friend.key));
+  const onlineNames = world.getPlayers()
+    .filter((candidate) => candidate.id !== player.id && !friendKeys.has(normalizeName(candidate.name)))
+    .map((candidate) => candidate.name);
+  const options = [...onlineNames, "Offline Player"];
+  const form = new ModalFormData()
+    .title("Add Guest")
+    .dropdown("Player", options, { defaultValueIndex: 0 })
+    .textField("Duration in days (optional)", "Blank means no expiration", { defaultValue: "" })
+    .submitButton("Add Guest");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const selectedIndex = response.formValues?.[0];
+    const durationValue = response.formValues?.[1];
+    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= options.length) {
+      player.sendMessage("The selected player was invalid.");
+      return;
+    }
+    if (!parseGuestDuration(durationValue).valid) {
+      player.sendMessage(`Guest duration must be blank or a whole number from 1 to ${MAX_GUEST_DAYS} days.`);
+      return;
+    }
+    if (selectedIndex === onlineNames.length) {
+      system.run(() => openOfflineClaimGuest(
+        player,
+        durationValue,
+        () => openClaimGuestMenu(player, onBack),
+      ));
+      return;
+    }
+    addGuest(player, onlineNames[selectedIndex], durationValue);
+  }).catch(() => player.sendMessage("The Add Guest menu could not be opened."));
+}
+
+function openClaimUnguestMenu(player, onBack) {
+  const { profile } = resolveOwnerProfile(player);
+  const activeGuests = profile.guests.filter((guest) => isActiveGuest(guest));
+  if (activeGuests.length === 0) {
+    player.sendMessage("You have no active guests on your claims.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const form = new ModalFormData()
+    .title("Remove Guest")
+    .dropdown(
+      "Guest",
+      activeGuests.map((guest) => `${guest.name} (${guestDurationLabel(guest)})`),
+      { defaultValueIndex: 0 },
+    )
+    .submitButton("Remove Guest");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const selectedIndex = response.formValues?.[0];
+    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= activeGuests.length) {
+      player.sendMessage("The selected guest was invalid.");
+      return;
+    }
+    removeGuest(player, activeGuests[selectedIndex].name);
+  }).catch(() => player.sendMessage("The Remove Guest menu could not be opened."));
 }
 
 function toggleProtection(player, option) {
@@ -929,12 +1191,17 @@ function showClaimInfo(player) {
   const friends = profile.friends.length > 0
     ? profile.friends.map((friend) => friend.name).join(", ")
     : "None";
+  const activeGuests = profile.guests.filter((guest) => isActiveGuest(guest));
+  const guests = activeGuests.length > 0
+    ? activeGuests.map((guest) => `${guest.name} (${guestDurationLabel(guest)})`).join(", ")
+    : "None";
   player.sendMessage(
     `§d§lClaim Information§r\n`
     + `Owner: ${claim.ownerName}\n`
     + `Dimension: ${dimensionToken(player.dimension.id)}\n`
     + `Chunk: ${chunk.x}, ${chunk.z}\n`
     + `Friends (all claims): ${friends}\n`
+    + `Guests (all claims): ${guests}\n`
     + `Fire tick: ${claim.fireTick ? "Enabled" : "Protected"}\n`
     + `Explosions: ${claim.explosions ? "Enabled" : "Protected"}`,
   );
@@ -1344,9 +1611,103 @@ function denyPlayer(player, ownerName) {
 function cancelIfUnauthorized(event, player, dimension, location) {
   if (!getEconomySettings().allowClaims) return false;
   const claim = getClaimAt(dimension, location);
-  if (!claim || isAuthorized(player, claim)) return false;
+  if (!claim || hasEditAccess(player, claim)) return false;
   event.cancel = true;
   denyPlayer(player, claim.ownerName);
+  return true;
+}
+
+function cancelIfNoInteractAccess(event, player, dimension, location) {
+  if (!getEconomySettings().allowClaims) return false;
+  const claim = getClaimAt(dimension, location);
+  if (!claim || hasInteractAccess(player, claim)) return false;
+  event.cancel = true;
+  denyPlayer(player, claim.ownerName);
+  return true;
+}
+
+function isGuestSafeBlockInteraction(block) {
+  const typeId = block.typeId;
+  if (GUEST_SAFE_BLOCK_TYPES.has(typeId)) return true;
+  if (
+    typeId === "minecraft:fence_gate"
+    || typeId === "minecraft:lever"
+    || typeId === "minecraft:trapdoor"
+    || typeId.endsWith("_button")
+    || typeId.endsWith("_door")
+    || typeId.endsWith("_trapdoor")
+    || typeId.endsWith("_fence_gate")
+  ) {
+    return true;
+  }
+  if (typeId === "minecraft:bed" || typeId.endsWith("_bed")) {
+    return block.dimension.id === "minecraft:overworld";
+  }
+  try {
+    return block.getComponent("minecraft:inventory") !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+function itemMayModifyClaim(itemStack) {
+  if (!itemStack) return false;
+  const typeId = itemStack.typeId;
+  if (
+    typeId.endsWith("_bucket")
+    || typeId.endsWith("_spawn_egg")
+    || typeId.endsWith("_dye")
+    || typeId.endsWith("_axe")
+    || typeId.endsWith("_hoe")
+    || typeId.endsWith("_shovel")
+    || typeId === "minecraft:bone_meal"
+    || typeId === "minecraft:flint_and_steel"
+    || typeId === "minecraft:glow_ink_sac"
+    || typeId === "minecraft:honeycomb"
+    || typeId === "minecraft:ink_sac"
+    || typeId === "minecraft:shears"
+  ) {
+    return true;
+  }
+  try {
+    return BlockTypes.get(typeId) !== undefined
+      || itemStack.hasComponent("minecraft:block_placer")
+      || itemStack.hasComponent("minecraft:entity_placer");
+  } catch {
+    return true;
+  }
+}
+
+function cancelGuestBlockInteraction(event) {
+  if (!getEconomySettings().allowClaims) return false;
+  const claim = getClaimAt(event.block.dimension, event.block.location);
+  if (!claim || hasEditAccess(event.player, claim)) return false;
+  if (!hasGuestAccess(event.player, claim)) {
+    event.cancel = true;
+    denyPlayer(event.player, claim.ownerName);
+    return true;
+  }
+
+  const unsafePlacement = event.player.isSneaking && itemMayModifyClaim(event.itemStack);
+  if (isGuestSafeBlockInteraction(event.block) && !unsafePlacement) return false;
+  event.cancel = true;
+  denyPlayer(event.player, claim.ownerName);
+  return true;
+}
+
+function cancelGuestEntityInteraction(event) {
+  if (!getEconomySettings().allowClaims) return false;
+  const claim = getClaimAt(event.target.dimension, event.target.location);
+  if (!claim || hasEditAccess(event.player, claim)) return false;
+  if (
+    hasGuestAccess(event.player, claim)
+    && GUEST_SAFE_ENTITY_TYPES.has(event.target.typeId)
+    && event.itemStack?.typeId !== "minecraft:name_tag"
+  ) {
+    return false;
+  }
+  event.cancel = true;
+  denyPlayer(event.player, claim.ownerName);
   return true;
 }
 
@@ -1471,9 +1832,11 @@ function openClaimLandMenu(player, onBack) {
 function openClaimFriendsMenu(player, onBack) {
   const form = new ActionFormData()
     .title("Manage Friends")
-    .body("Friend invitations apply to all chunks you own.")
+    .body("Friend and guest access applies to all chunks you own. Friends can build. Guests can interact and pick up items, but cannot edit or cause harm.")
     .button("Add Friend")
-    .button("Remove Friend");
+    .button("Remove Friend")
+    .button("Add Guest")
+    .button("Remove Guest");
 
   form.show(player).then((response) => {
     if (response.canceled || response.selection === undefined) {
@@ -1482,7 +1845,9 @@ function openClaimFriendsMenu(player, onBack) {
     }
     const returnToFriends = () => openClaimFriendsMenu(player, onBack);
     if (response.selection === 0) system.run(() => openClaimInviteMenu(player, returnToFriends));
-    if (response.selection === 1) system.run(() => openClaimDeinviteMenu(player, returnToFriends));
+    if (response.selection === 1) system.run(() => openClaimUninviteMenu(player, returnToFriends));
+    if (response.selection === 2) system.run(() => openClaimGuestMenu(player, returnToFriends));
+    if (response.selection === 3) system.run(() => openClaimUnguestMenu(player, returnToFriends));
   }).catch(() => player.sendMessage("The Manage Friends menu could not be opened."));
 }
 
@@ -1525,7 +1890,7 @@ function parseRadius(value) {
 export function registerClaimCommand(commandRegistry) {
   commandRegistry.registerEnum(
     "moolah:claim_action",
-    ["add", "remove", "invite", "deinvite", "toggle", "info", "walk", "view"],
+    ["add", "remove", "invite", "uninvite", "guest", "unguest", "toggle", "info", "walk", "view"],
   );
   commandRegistry.registerCommand(
     {
@@ -1576,11 +1941,25 @@ export function registerClaimCommand(commandRegistry) {
         system.run(() => openClaimInviteMenu(player));
         return { status: CustomCommandStatus.Success };
       }
-      if (action === "deinvite") {
+      if (action === "uninvite") {
         if (value !== undefined) {
-          return { status: CustomCommandStatus.Failure, message: "Usage: /claim deinvite" };
+          return { status: CustomCommandStatus.Failure, message: "Usage: /claim uninvite" };
         }
-        system.run(() => openClaimDeinviteMenu(player));
+        system.run(() => openClaimUninviteMenu(player));
+        return { status: CustomCommandStatus.Success };
+      }
+      if (action === "guest") {
+        if (value !== undefined) {
+          return { status: CustomCommandStatus.Failure, message: "Usage: /claim guest" };
+        }
+        system.run(() => openClaimGuestMenu(player));
+        return { status: CustomCommandStatus.Success };
+      }
+      if (action === "unguest") {
+        if (value !== undefined) {
+          return { status: CustomCommandStatus.Failure, message: "Usage: /claim unguest" };
+        }
+        system.run(() => openClaimUnguestMenu(player));
         return { status: CustomCommandStatus.Success };
       }
       if (action === "toggle") {
@@ -1605,7 +1984,7 @@ export function registerClaimCommand(commandRegistry) {
 
       return {
         status: CustomCommandStatus.Failure,
-        message: "Usage: /claim <add|remove> [radius] or /claim <invite|deinvite|toggle|info|walk|view>",
+        message: "Usage: /claim <add|remove> [radius] or /claim <invite|uninvite|guest|unguest|toggle|info|walk|view>",
       };
     },
   );
@@ -1619,6 +1998,11 @@ export function initializeClaimSystem() {
     cancelIfUnauthorized(event, event.player, event.dimension, event.block.location);
   });
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
+    const claim = getClaimAt(event.block.dimension, event.block.location);
+    if (claim && hasGuestAccess(event.player, claim) && !hasEditAccess(event.player, claim)) {
+      cancelGuestBlockInteraction(event);
+      return;
+    }
     if (cancelIfUnauthorized(event, event.player, event.block.dimension, event.block.location)) return;
     const placementLocation = getPlacementLocation(event);
     if (placementLocation) {
@@ -1626,11 +2010,11 @@ export function initializeClaimSystem() {
     }
   });
   world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
-    cancelIfUnauthorized(event, event.player, event.target.dimension, event.target.location);
+    cancelGuestEntityInteraction(event);
   });
   world.beforeEvents.entityItemPickup.subscribe((event) => {
     if (event.entity.typeId !== "minecraft:player") return;
-    cancelIfUnauthorized(event, event.entity, event.item.dimension, event.item.location);
+    cancelIfNoInteractAccess(event, event.entity, event.item.dimension, event.item.location);
   });
   world.beforeEvents.entityHurt.subscribe((event) => {
     if (!getEconomySettings().allowClaims) return;
@@ -1642,7 +2026,7 @@ export function initializeClaimSystem() {
       return;
     }
     const attacker = getDamagePlayer(event.damageSource);
-    if (attacker && !isAuthorized(attacker, claim)) {
+    if (attacker && !hasEditAccess(attacker, claim)) {
       event.cancel = true;
       denyPlayer(attacker, claim.ownerName);
     }
