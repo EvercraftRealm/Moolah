@@ -8,6 +8,8 @@
 - Added **Add Guest** and **Remove Guest** under **Manage Friends**, plus
   `/claim guest` and `/claim unguest`.
 - Renamed `/claim deinvite` to `/claim uninvite`.
+- Added a safe admin tool for removing one player's claims in a selected area
+  or across every dimension, with an exact-count confirmation and no refund.
 
 ## 1.1.2 - 2026-10-13
 

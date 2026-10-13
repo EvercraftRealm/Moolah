@@ -68,6 +68,7 @@ const EXPLOSION_DAMAGE_CAUSES = new Set(["blockexplosion", "entityexplosion"]);
 const shardCache = new Map();
 const profileCache = new Map();
 const claimLocks = new Set();
+const adminClaimRemovalOwners = new Set();
 const walkSessions = new Map();
 const claimViewPlayers = new Set();
 const lastPlayerClaimStates = new Map();
@@ -309,6 +310,49 @@ function saveProfile(profile) {
   profileCache.set(clean.ownerKey, clean);
 }
 
+function listClaimOwners() {
+  const owners = new Map();
+  for (const propertyId of world.getDynamicPropertyIds()) {
+    if (!propertyId.startsWith("moolah:claim_profile:")) continue;
+    const raw = world.getDynamicProperty(propertyId);
+    if (typeof raw !== "string") continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ownerKey !== "string" || !parsed.ownerKey) continue;
+      const profile = sanitizeProfile(parsed, parsed.ownerKey, parsed.ownerName);
+      if (profile.claimCount > 0) owners.set(profile.ownerKey, profile);
+    } catch {
+      console.error(`[Moolah Claims] Ignoring malformed owner profile ${propertyId}.`);
+    }
+  }
+  return [...owners.values()].sort((left, right) => (
+    left.ownerName.localeCompare(right.ownerName, undefined, { sensitivity: "base" })
+  ));
+}
+
+function getClaimShardPropertyIds() {
+  return world.getDynamicPropertyIds().filter((propertyId) => propertyId.startsWith("moolah:claims:"));
+}
+
+function findClaimOwner(input, knownOwners = listClaimOwners()) {
+  const target = normalizeName(input);
+  if (!target) return undefined;
+
+  const known = knownOwners.find((owner) => (
+    normalizeName(owner.ownerName) === target || owner.ownerKey === target
+  ));
+  if (known) return known;
+
+  for (const propertyId of getClaimShardPropertyIds()) {
+    for (const claim of Object.values(loadShard(propertyId).claims)) {
+      if (claim.ownerKey === target || normalizeName(claim.ownerName) === target) {
+        return getProfile(claim.ownerKey, claim.ownerName);
+      }
+    }
+  }
+  return undefined;
+}
+
 function restoreProfile(ownerKey, rawValue) {
   const propertyId = profilePropertyId(ownerKey);
   world.setDynamicProperty(propertyId, rawValue);
@@ -449,6 +493,11 @@ function purchaseChunks(player, dimensionId, requestedChunks) {
     return;
   }
 
+  if (adminClaimRemovalOwners.size > 0) {
+    player.sendMessage("Claims are briefly locked while an administrator removes claims. Try again shortly.");
+    return;
+  }
+
   const releaseLocks = acquireLocks(dimensionId, requestedChunks);
   if (!releaseLocks) {
     player.sendMessage("One of those chunks is already being updated. Try again.");
@@ -586,6 +635,11 @@ export function confirmClaimAdd(player, radius = 0, onBack) {
 }
 
 function removeChunks(player, dimensionId, requestedChunks, targetOwnerKey, isAdminRemoval) {
+  if (adminClaimRemovalOwners.size > 0) {
+    player.sendMessage("Claims are briefly locked while an administrator removes claims. Try again shortly.");
+    return;
+  }
+
   const releaseLocks = acquireLocks(dimensionId, requestedChunks);
   if (!releaseLocks) {
     player.sendMessage("One of those chunks is already being updated. Try again.");
@@ -708,6 +762,202 @@ export function confirmClaimRemove(player, radius = 0, onBack) {
       system.run(() => removeChunks(player, dimensionId, chunks, targetOwnerKey, adminTarget));
     }
   }).catch(() => player.sendMessage("The claim removal confirmation could not be opened."));
+}
+
+function buildAdminRemovalGroups(ownerKey, scope, dimensionId, center, radius) {
+  const propertySelections = new Map();
+  if (scope === "global") {
+    for (const propertyId of getClaimShardPropertyIds()) {
+      propertySelections.set(propertyId, undefined);
+    }
+  } else {
+    for (const chunk of enumerateRadius(center, radius)) {
+      const descriptor = getShardDescriptor(dimensionId, chunk.x, chunk.z);
+      let indexes = propertySelections.get(descriptor.propertyId);
+      if (!indexes) {
+        indexes = new Set();
+        propertySelections.set(descriptor.propertyId, indexes);
+      }
+      indexes.add(descriptor.localIndex);
+    }
+  }
+
+  const groups = [];
+  let count = 0;
+  for (const [propertyId, selectedIndexes] of propertySelections) {
+    const before = { ...loadShard(propertyId).claims };
+    const after = { ...before };
+    let removed = 0;
+    for (const [localIndex, claim] of Object.entries(before)) {
+      if (claim.ownerKey !== ownerKey) continue;
+      if (selectedIndexes && !selectedIndexes.has(localIndex)) continue;
+      delete after[localIndex];
+      removed++;
+    }
+    if (removed > 0) {
+      groups.push({ propertyId, before, after, removed });
+      count += removed;
+    }
+  }
+  return { groups, count };
+}
+
+function* runAdminClaimRemoval(player, owner, scope, dimensionId, center, radius) {
+  if (!player.hasTag("econ_admin")) {
+    player.sendMessage("You no longer have permission to remove claims.");
+    return;
+  }
+  if (adminClaimRemovalOwners.size > 0) {
+    player.sendMessage("Another administrative claim removal is already running. Try again shortly.");
+    return;
+  }
+
+  adminClaimRemovalOwners.add(owner.ownerKey);
+  const saved = [];
+  const previousProfileRaw = world.getDynamicProperty(profilePropertyId(owner.ownerKey));
+  try {
+    const { groups, count } = buildAdminRemovalGroups(
+      owner.ownerKey,
+      scope,
+      dimensionId,
+      center,
+      radius,
+    );
+    if (count === 0) {
+      player.sendMessage(`No claims owned by ${owner.ownerName} remain in that scope.`);
+      return;
+    }
+
+    for (const group of groups) {
+      saveShard(group.propertyId, group.after);
+      saved.push(group);
+      yield;
+    }
+
+    const currentProfile = getProfile(owner.ownerKey, owner.ownerName);
+    saveProfile({
+      ...currentProfile,
+      claimCount: Math.max(0, currentProfile.claimCount - count),
+      friends: [...currentProfile.friends],
+      guests: [...currentProfile.guests],
+    });
+    player.sendMessage(
+      `Removed ${count} claim${count === 1 ? "" : "s"} owned by ${owner.ownerName}. No refund was issued.`,
+    );
+  } catch (error) {
+    for (const group of saved.reverse()) {
+      try {
+        saveShard(group.propertyId, group.before);
+      } catch (rollbackError) {
+        console.error(`[Moolah Claims] Administrative removal rollback failed: ${rollbackError}`);
+      }
+      yield;
+    }
+    try {
+      restoreProfile(owner.ownerKey, previousProfileRaw);
+    } catch (rollbackError) {
+      console.error(`[Moolah Claims] Administrative profile rollback failed: ${rollbackError}`);
+    }
+    console.error(`[Moolah Claims] Administrative removal failed: ${error?.stack ?? error}`);
+    player.sendMessage("The administrative claim removal failed and was rolled back.");
+  } finally {
+    adminClaimRemovalOwners.delete(owner.ownerKey);
+  }
+}
+
+function confirmAdminClaimRemoval(player, owner, scope, radius, onBack) {
+  if (!player.hasTag("econ_admin")) {
+    player.sendMessage("You no longer have permission to remove claims.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const dimensionId = player.dimension.id;
+  const center = getChunk(player.location);
+  const { count } = buildAdminRemovalGroups(owner.ownerKey, scope, dimensionId, center, radius);
+  if (count === 0) {
+    player.sendMessage(`${owner.ownerName} has no claims in that scope.`);
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const scopeText = scope === "global"
+    ? "All dimensions"
+    : `Radius ${radius} around chunk ${center.x}, ${center.z}\nDimension: ${dimensionToken(dimensionId)}`;
+  const form = new MessageFormData()
+    .title("Confirm Claim Removal")
+    .body(
+      `Owner: ${owner.ownerName}\n`
+      + `Scope: ${scopeText}\n`
+      + `Claims removed: ${count}\n\n`
+      + "No refund will be issued. This cannot be undone.",
+    )
+    .button1("Remove Claims")
+    .button2("Back");
+
+  form.show(player).then((response) => {
+    if (response.canceled || response.selection === 1) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    if (response.selection !== 0) return;
+    try {
+      system.runJob(runAdminClaimRemoval(player, owner, scope, dimensionId, center, radius));
+    } catch (error) {
+      console.error(`[Moolah Claims] Could not start administrative removal: ${error}`);
+      player.sendMessage("The administrative claim removal could not be started.");
+    }
+  }).catch(() => player.sendMessage("The claim removal confirmation could not be opened."));
+}
+
+export function openAdminClaimRemovalMenu(player, onBack) {
+  if (!player.hasTag("econ_admin")) {
+    player.sendMessage("You do not have permission to remove claims.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const owners = listClaimOwners();
+  const ownerOptions = [
+    ...owners.map((owner) => `${owner.ownerName} (${owner.claimCount})`),
+    "Offline Player",
+  ];
+  const form = new ModalFormData()
+    .title("Remove Player Claims")
+    .dropdown("Claim Owner", ownerOptions, { defaultValueIndex: 0 })
+    .textField("Offline Player", "Exact username (only when selected)", { defaultValue: "" })
+    .dropdown("Scope", ["Area Around Me", "All Claims (Every Dimension)"], { defaultValueIndex: 0 })
+    .dropdown("Area Radius", ["1", "2", "3", "4", "5", "6", "7", "8", "9"], {
+      defaultValueIndex: 0,
+    })
+    .submitButton("Review Removal");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    if (!response.formValues || !player.hasTag("econ_admin")) {
+      player.sendMessage("You no longer have permission to remove claims.");
+      return;
+    }
+
+    const [ownerIndex, offlineName, scopeIndex, radiusIndex] = response.formValues;
+    const owner = ownerIndex === owners.length
+      ? findClaimOwner(offlineName, owners)
+      : owners[ownerIndex];
+    if (!owner) {
+      player.sendMessage("That player could not be found with any claims. Enter their exact username.");
+      system.run(() => openAdminClaimRemovalMenu(player, onBack));
+      return;
+    }
+
+    const scope = scopeIndex === 1 ? "global" : "area";
+    const radius = Number(radiusIndex) + 1;
+    system.run(() => confirmAdminClaimRemoval(player, owner, scope, radius, () => (
+      openAdminClaimRemovalMenu(player, onBack)
+    )));
+  }).catch(() => player.sendMessage("The player claim removal menu could not be opened."));
 }
 
 function resolveOwnerProfile(player) {

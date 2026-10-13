@@ -111,6 +111,8 @@ Unauthorized players cannot break or place blocks, use doors or containers, inte
 
 Entering or leaving a claimed area shows its owner in the actionbar. Moving between adjacent chunks owned by the same player does not repeat the message. Economy admins can remove another player's claims by standing in one and using the normal remove command; administrative removals never issue refunds.
 
+For larger cleanups, use **Admin → Claims → Remove Player Claims**. Select a known owner or enter an offline player's exact username, then remove their claims within a radius of 1–9 chunks around you or remove all of their claims in every dimension. The final screen shows the exact number before anything is removed. Bulk administrative removals do not issue refunds.
+
 ## QuickPay signs
 
 QuickPay signs provide simple one-click transfers. They are not a "chest-shop" and do not protect items, but they provide a convenient alternative to paying with diamonds in brick-and-mortar shops. Write a sign using this exact four-line layout:
@@ -207,9 +209,11 @@ The Admin menu is organized into six categories:
   - **Listing Fee** — 10 moolah by default
   - **Refund Cancelled Listing Fees** — off by default
 - **Claims**
-  - **Allow Claims** — off by default; also controls `/claim`
-  - **Claim Cost per Chunk** — 10 moolah by default
-  - **Refund Removed Claims** — off by default; refunds are limited by available Tax Pool funds
+  - **Claim Settings**
+    - **Allow Claims** — off by default; also controls `/claim`
+    - **Claim Cost per Chunk** — 10 moolah by default
+    - **Refund Removed Claims** — off by default; refunds are limited by available Tax Pool funds
+  - **Remove Player Claims** — safely removes one player's claims in a radius or globally after an exact-count confirmation; no refund is issued
 - **Misc**
   - **Allow Transfer Desc.** — on by default; controls descriptions in transfers and QuickPay
   - **Postage Cost** — 5 moolah by default

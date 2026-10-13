@@ -5,6 +5,7 @@ import {
   getTaxPool,
   saveEconomySettings,
 } from "./settings.js";
+import { openAdminClaimRemovalMenu } from "./claims.js";
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
@@ -265,9 +266,34 @@ function openMarketAdminMenu(player, onBack) {
 function openClaimsAdminMenu(player, onBack) {
   if (!canConfigureEconomy(player, onBack)) return;
 
+  const form = new ActionFormData()
+    .title("Claims")
+    .body("Configure claims or safely remove one player's claims.")
+    .button("Claim Settings")
+    .button("Remove Player Claims");
+
+  form.show(player).then((response) => {
+    if (response.canceled || response.selection === undefined) {
+      goBack(onBack);
+      return;
+    }
+    const returnToClaims = () => openClaimsAdminMenu(player, onBack);
+    if (response.selection === 0) {
+      system.run(() => openClaimSettingsMenu(player, returnToClaims));
+    } else if (response.selection === 1) {
+      system.run(() => openAdminClaimRemovalMenu(player, returnToClaims));
+    }
+  }).catch(() => {
+    player.sendMessage("The Claims admin menu could not be opened.");
+  });
+}
+
+function openClaimSettingsMenu(player, onBack) {
+  if (!canConfigureEconomy(player, onBack)) return;
+
   const settings = getEconomySettings();
   const form = new ModalFormData()
-    .title("Claims")
+    .title("Claim Settings")
     .toggle("Allow Claims", { defaultValue: settings.allowClaims })
     .textField("Claim Cost per Chunk", "0 or more", {
       defaultValue: String(settings.claimCostPerChunk),
@@ -308,7 +334,7 @@ function openClaimsAdminMenu(player, onBack) {
     player.sendMessage("Claim settings saved.");
     goBack(onBack);
   }).catch(() => {
-    player.sendMessage("The Claim settings menu could not be opened.");
+    player.sendMessage("The Claim Settings menu could not be opened.");
   });
 }
 
