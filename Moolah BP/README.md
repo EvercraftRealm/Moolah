@@ -187,7 +187,7 @@ The purchase confirmation shows the listing price, Market tax, and final total. 
 
 Only players with the `econ_admin` tag can access the **Admin** menu. On a new world, Moolah automatically grants this tag to the first player who joins, once for the lifetime of that world. This gives vanilla Realm owners access without enabling cheats.
 
-The Admin menu is organized into six categories:
+The Admin menu is organized into seven categories:
 
 - **General**
   - **Allow Deposit** — on by default
@@ -224,6 +224,10 @@ The Admin menu is organized into six categories:
   - **Interdimensional Multiplier** — 2x by default; configurable from 1x to 5x
   - **Minimum Warp Cost** — blank and without a minimum by default
   - **Max Warp Cost** — blank and uncapped by default
+- **Logs**
+  - Separate logs for deposits, withdrawals, transfers, mail, Market actions, warps, claims, and admin/tax actions
+  - Records completed actions only, with the newest entries first
+  - Keeps up to 512 recent entries in bounded storage, with an optional **All Activity** overview
 
 Taxes are charged in addition to the base value and added to the shared **Tax Pool**. Transfer taxes remain refundable while the payment is Pending and only enter the pool after the recipient accepts. When configured, the flat Death Tax is collected no more than once per player during its cooldown period; the player receives the result as Inbox Mail from **System**.
 

@@ -9,6 +9,7 @@ import {
   calculateTax,
   getEconomySettings,
 } from "./settings.js";
+import { writeAuditLog } from "./audit.js";
 
 const LISTING_PROPERTY_PREFIX = "moolah:market:";
 const STORAGE_ENTITY_TYPE = "moolah:market_storage";
@@ -285,6 +286,7 @@ function createListing(player, selectedSlot, price, description) {
     `Listed ${createdListing.amount}x ${createdListing.itemName} for \uE102${formatAmount(createdListing.price)}`
       + `${createdListing.listingFee > 0 ? ` (\uE102${formatAmount(createdListing.listingFee)} fee)` : ""}.`,
   );
+  writeAuditLog("market", "Listing Created", player, `${createdListing.amount}x ${createdListing.itemName}; price ${createdListing.price} Moolah; fee ${createdListing.listingFee} Moolah.`);
 }
 
 export function createListingFromCommand(player, price, description = "") {
@@ -471,6 +473,7 @@ function purchaseListing(buyer, propertyId) {
   buyer.sendMessage(
     `Bought ${listing.amount}x ${listing.itemName} for \uE102${formatAmount(totalCost)} (\uE102${formatAmount(taxAmount)} tax).`,
   );
+  writeAuditLog("market", "Listing Purchased", buyer, `${listing.amount}x ${listing.itemName} from ${listing.sellerName}; paid ${totalCost} Moolah (${taxAmount} tax).`);
 
   const seller = world.getPlayers().find(
     (player) => player.id === listing.sellerId,
@@ -616,6 +619,7 @@ function editListing(player, propertyId, onBack) {
       description: validated.description,
     });
     player.sendMessage("Listing updated.");
+    writeAuditLog("market", "Listing Updated", player, `${currentListing.amount}x ${currentListing.itemName}; price changed from ${currentListing.price} to ${validated.price} Moolah.`);
   }).catch(() => {
     player.sendMessage("The edit form could not be opened.");
   });
@@ -686,6 +690,7 @@ function cancelListing(player, propertyId) {
         ? ` and refunded the \uE102${formatAmount(listing.listingFee)} listing fee`
         : ""}.`,
   );
+  writeAuditLog("market", "Listing Canceled", player, `${listing.amount}x ${listing.itemName}; listing fee ${listing.listingFee} Moolah; refunded: ${listingFeeRefunded ? "yes" : "no"}.`);
 }
 
 function confirmListingCancellation(player, listing, onBack) {
@@ -732,6 +737,7 @@ function claimListingProceeds(player, propertyId) {
 
   world.setDynamicProperty(propertyId, undefined);
   player.sendMessage(`Claimed \uE102${formatAmount(listing.price)} from ${listing.itemName}.`);
+  writeAuditLog("market", "Sale Proceeds Claimed", player, `${listing.price} Moolah from ${listing.amount}x ${listing.itemName}; buyer ${listing.buyerName}.`);
 }
 
 function openOwnedListing(player, listing, onBack) {

@@ -10,6 +10,8 @@
 - Renamed `/claim deinvite` to `/claim uninvite`.
 - Added a safe admin tool for removing one player's claims in a selected area
   or across every dimension, with an exact-count confirmation and no refund.
+- Added separate, persistent admin logs for deposits, withdrawals, transfers,
+  mail, Market actions, warps, claims, and admin/tax actions.
 
 ## 1.1.2 - 2026-10-13
 

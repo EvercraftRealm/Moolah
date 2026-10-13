@@ -1,6 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { addToTaxPool, getEconomySettings } from "./settings.js";
+import { writeAuditLog } from "./audit.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const NETHER_COORDINATE_SCALE = 8;
@@ -161,6 +162,12 @@ function performWarp(player, destination, expectedCost) {
   addToTaxPool(expectedCost);
   player.sendMessage(
     `Warped to ${destination.label}${expectedCost > 0 ? ` for ${MINECOIN_GLYPH}${expectedCost}` : ""}.`,
+  );
+  writeAuditLog(
+    "warp",
+    "Warp Completed",
+    player,
+    `Destination: ${destination.label}; ${getDimensionName(destination.dimension)} at ${Math.floor(destination.location.x)}, ${Math.floor(destination.location.y)}, ${Math.floor(destination.location.z)}; cost ${expectedCost} Moolah.`,
   );
 }
 

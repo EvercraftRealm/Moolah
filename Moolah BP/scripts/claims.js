@@ -11,6 +11,7 @@ import {
 } from "@minecraft/server";
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
+import { writeAuditLog } from "./audit.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const OWNER_KEY_PROPERTY = "moolah:claim_owner_key";
@@ -577,6 +578,7 @@ function purchaseChunks(player, dimensionId, requestedChunks) {
     }
 
     player.sendMessage(`Claimed ${available.length} chunk${available.length === 1 ? "" : "s"} for ${MINECOIN_GLYPH}${formatAmount(totalCost)}. The charge was sent to the Tax Pool.`);
+    writeAuditLog("claim", "Land Claimed", player, `${available.length} chunk(s) in ${dimensionToken(dimensionId)}; cost ${totalCost} Moolah.`);
   } finally {
     releaseLocks();
   }
@@ -699,6 +701,7 @@ function removeChunks(player, dimensionId, requestedChunks, targetOwnerKey, isAd
       ? ` Refunded ${MINECOIN_GLYPH}${formatAmount(refund)} from the Tax Pool.`
       : " No refund was issued.";
     player.sendMessage(`Removed ${removable.length} chunk claim${removable.length === 1 ? "" : "s"} owned by ${ownerName}.${refundText}`);
+    writeAuditLog("claim", isAdminRemoval ? "Claim Removed by Admin" : "Land Unclaimed", player, `${removable.length} chunk(s) owned by ${ownerName} in ${dimensionToken(dimensionId)}; refund ${refund} Moolah.`);
   } finally {
     releaseLocks();
   }
@@ -844,6 +847,7 @@ function* runAdminClaimRemoval(player, owner, scope, dimensionId, center, radius
     player.sendMessage(
       `Removed ${count} claim${count === 1 ? "" : "s"} owned by ${owner.ownerName}. No refund was issued.`,
     );
+    writeAuditLog("claim", "Bulk Claims Removed by Admin", player, `${count} claim(s) owned by ${owner.ownerName}; scope ${scope === "global" ? "all dimensions" : `radius ${radius} in ${dimensionToken(dimensionId)}`}; no refund.`);
   } catch (error) {
     for (const group of saved.reverse()) {
       try {
@@ -1015,6 +1019,7 @@ function inviteFriend(player, username) {
     saveProfile(nextProfile);
     player.sendMessage(`${onlineTarget?.name ?? targetName} can now use, build, and interact in all of your claimed chunks.`);
     onlineTarget?.sendMessage(`${player.name} invited you to all of their claimed chunks.`);
+    writeAuditLog("claim", "Claim Friend Added", player, `${onlineTarget?.name ?? targetName} received full access to all claims.`);
   } catch (error) {
     console.error(`[Moolah Claims] Invite failed: ${error?.stack ?? error}`);
     player.sendMessage("That claim invitation could not be saved.");
@@ -1041,6 +1046,7 @@ function uninviteFriend(player, username) {
     player.sendMessage(`${targetName} can no longer access any of your claimed chunks.`);
     const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
     onlineTarget?.sendMessage(`${player.name} removed your access to all of their claimed chunks.`);
+    writeAuditLog("claim", "Claim Friend Removed", player, `${targetName} lost full access to all claims.`);
   } catch (error) {
     console.error(`[Moolah Claims] Uninvite failed: ${error?.stack ?? error}`);
     player.sendMessage("That claim permission change could not be saved.");
@@ -1218,6 +1224,7 @@ function addGuest(player, username, durationValue) {
       : `for ${duration.days} day${duration.days === 1 ? "" : "s"}`;
     player.sendMessage(`${guest.name} is now a guest on all of your claims ${durationText}.`);
     onlineTarget?.sendMessage(`${player.name} added you as an interaction-only guest on all of their claims ${durationText}.`);
+    writeAuditLog("claim", "Claim Guest Added", player, `${guest.name} received interaction-only access ${durationText}.`);
   } catch (error) {
     console.error(`[Moolah Claims] Add guest failed: ${error?.stack ?? error}`);
     player.sendMessage("That guest permission could not be saved.");
@@ -1239,6 +1246,7 @@ function removeGuest(player, username) {
     player.sendMessage(`${targetName} is no longer a guest on your claims.`);
     const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
     onlineTarget?.sendMessage(`${player.name} removed your guest access to their claims.`);
+    writeAuditLog("claim", "Claim Guest Removed", player, `${targetName} lost guest access to all claims.`);
   } catch (error) {
     console.error(`[Moolah Claims] Remove guest failed: ${error?.stack ?? error}`);
     player.sendMessage("That guest permission change could not be saved.");
@@ -1365,6 +1373,7 @@ function toggleProtection(player, option) {
     commitClaimChanges(dimensionId, [{ ...center, claim: updated }]);
     const enabled = key === "firetick" ? updated.fireTick : updated.explosions;
     player.sendMessage(`${key === "firetick" ? "Fire tick" : "Explosions"} ${enabled ? "enabled" : "protected"} in this chunk.`);
+    writeAuditLog("claim", "Claim Protection Changed", player, `${key === "firetick" ? "Fire tick" : "Explosions"} ${enabled ? "enabled" : "protected"} at chunk ${center.x}, ${center.z} in ${dimensionToken(dimensionId)}.`);
   } catch (error) {
     console.error(`[Moolah Claims] Protection toggle failed: ${error?.stack ?? error}`);
     player.sendMessage("That protection setting could not be changed.");

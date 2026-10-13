@@ -9,6 +9,7 @@ import {
   calculateTax,
   getEconomySettings,
 } from "./settings.js";
+import { writeAuditLog } from "./audit.js";
 
 const DEPOSIT_QUANTITIES = [1, 4, 16, 64];
 const ESCROW_PROPERTY_PREFIX = "moolah:escrow:";
@@ -127,6 +128,7 @@ export function depositDiamonds(player, quantity) {
   player.sendMessage(
     `Deposited ${quantity} diamond${quantity === 1 ? "" : "s"} for \uE102${quantity * 100}.`,
   );
+  writeAuditLog("deposit", "Diamonds Deposited", player, `${quantity} diamond(s); credited ${quantity * 100} Moolah.`);
 }
 
 export function openDepositMenu(player, onBack) {
@@ -299,6 +301,7 @@ function withdrawDiamonds(player, quantity) {
   player.sendMessage(
     `Withdrew ${quantity} diamond${quantity === 1 ? "" : "s"} for ${MINECOIN_GLYPH}${totalCost}.`,
   );
+  writeAuditLog("withdrawal", "Diamonds Withdrawn", player, `${quantity} diamond(s); charged ${totalCost} Moolah (${taxAmount} tax).`);
 }
 
 export function confirmWithdrawal(player, quantity, onBack) {
@@ -584,6 +587,7 @@ function createEscrowPayment(sender, recipientName, amount, message = "") {
     `Created a pending transfer of \uE102${amount} for ${recipientName}`
       + `${taxAmount > 0 ? ` (\uE102${taxAmount} tax)` : ""}.`,
   );
+  writeAuditLog("transfer", "Transfer Created", sender, `To ${recipientName}; ${amount} Moolah (${taxAmount} tax) placed in escrow.`);
 
   const onlineRecipient = world.getPlayers().find(
     (player) => player.name.toLowerCase() === recipientName.toLowerCase(),
@@ -642,6 +646,7 @@ function createEscrowMail(sender, recipientName, message) {
     `Sent pending mail to ${recipientName}`
       + `${postageCost > 0 ? ` for ${MINECOIN_GLYPH}${postageCost} postage` : ""}.`,
   );
+  writeAuditLog("mail", "Mail Sent", sender, `To ${recipientName}; ${postageCost} Moolah postage.`);
 
   const onlineRecipient = world.getPlayers().find(
     (player) => player.name.toLowerCase() === recipientName.toLowerCase(),
@@ -689,9 +694,11 @@ function acceptEscrowPayment(recipient, propertyId) {
     recipient.sendMessage(
       `Accepted \uE102${payment.amount} from ${payment.senderName}.`,
     );
+    writeAuditLog("transfer", "Transfer Accepted", recipient, `From ${payment.senderName}; ${payment.amount} Moolah received; ${payment.taxAmount} tax moved to the Tax Pool.`);
   } else {
     addToTaxPool(payment.postageCost);
     recipient.sendMessage(`Accepted mail from ${payment.senderName}.`);
+    writeAuditLog("mail", "Mail Accepted", recipient, `From ${payment.senderName}; ${payment.postageCost} Moolah postage moved to the Tax Pool.`);
   }
 
   const sender = world.getPlayers().find(
@@ -826,6 +833,12 @@ function cancelEscrowPayment(sender, propertyId) {
     `Canceled the ${payment.kind === "mail" ? "mail" : "payment"} to ${payment.recipientName}`
       + `${refundAmount > 0 ? ` and refunded \uE102${refundAmount}` : ""}`
       + `${taxPoolAmount > 0 ? `; \uE102${taxPoolAmount} postage was moved to the Tax Pool` : ""}.`,
+  );
+  writeAuditLog(
+    payment.kind === "mail" ? "mail" : "transfer",
+    payment.kind === "mail" ? "Mail Canceled" : "Transfer Canceled",
+    sender,
+    `To ${payment.recipientName}; ${refundAmount} Moolah refunded; ${taxPoolAmount} Moolah moved to the Tax Pool.`,
   );
 }
 

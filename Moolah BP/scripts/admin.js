@@ -6,6 +6,7 @@ import {
   saveEconomySettings,
 } from "./settings.js";
 import { openAdminClaimRemovalMenu } from "./claims.js";
+import { openAuditLogMenu, writeAuditLog } from "./audit.js";
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
@@ -30,7 +31,8 @@ export function openAdminMenu(player, onBack) {
     .button("Market")
     .button("Claims")
     .button("Warp")
-    .button("Misc");
+    .button("Misc")
+    .button("Logs");
 
   form.show(player).then((response) => {
     if (response.canceled || response.selection === undefined) {
@@ -52,6 +54,8 @@ export function openAdminMenu(player, onBack) {
       system.run(() => openWarpAdminMenu(player, returnToAdmin));
     } else if (response.selection === 5) {
       system.run(() => openMiscAdminMenu(player, returnToAdmin));
+    } else if (response.selection === 6) {
+      system.run(() => openAuditLogMenu(player, returnToAdmin));
     }
   }).catch(() => {
     player.sendMessage("The Admin menu could not be opened.");
@@ -66,11 +70,12 @@ function canConfigureEconomy(player, onBack) {
   return false;
 }
 
-function saveAdminSettings(partialSettings) {
+function saveAdminSettings(player, label, partialSettings) {
   saveEconomySettings({
     ...getEconomySettings(),
     ...partialSettings,
   });
+  writeAuditLog("admin", `${label} Settings Updated`, player, JSON.stringify(partialSettings));
 }
 
 function openGeneralAdminMenu(player, onBack) {
@@ -100,7 +105,7 @@ function openGeneralAdminMenu(player, onBack) {
       return;
     }
 
-    saveAdminSettings({ allowDeposit, allowWithdraw, allowTransfer, allowMail });
+    saveAdminSettings(player, "General", { allowDeposit, allowWithdraw, allowTransfer, allowMail });
     player.sendMessage("General settings saved.");
     goBack(onBack);
   }).catch(() => {
@@ -184,7 +189,7 @@ function openTaxPolicyAdminMenu(player, onBack) {
       return;
     }
 
-    saveAdminSettings({
+    saveAdminSettings(player, "Tax Policy", {
       transferTaxRate,
       withdrawTaxRate,
       marketTaxRate,
@@ -250,7 +255,7 @@ function openMarketAdminMenu(player, onBack) {
       return;
     }
 
-    saveAdminSettings({
+    saveAdminSettings(player, "Market", {
       allowMarket,
       listingFee,
       maxMarketListings,
@@ -326,7 +331,7 @@ function openClaimSettingsMenu(player, onBack) {
       return;
     }
 
-    saveAdminSettings({
+    saveAdminSettings(player, "Claims", {
       allowClaims,
       claimCostPerChunk,
       refundRemovedClaims,
@@ -381,7 +386,7 @@ function openMiscAdminMenu(player, onBack) {
       return;
     }
 
-    saveAdminSettings({
+    saveAdminSettings(player, "Misc", {
       allowTransferDescriptions,
       postageCost,
       refundCanceledPostage,
@@ -475,7 +480,7 @@ function openWarpAdminMenu(player, onBack) {
       return;
     }
 
-    saveAdminSettings({
+    saveAdminSettings(player, "Warp", {
       allowWarp,
       warpCostPer100,
       interdimensionalWarpMultiplier,

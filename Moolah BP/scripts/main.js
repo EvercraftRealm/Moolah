@@ -47,6 +47,7 @@ import {
   getTaxPool,
   setTaxPool,
 } from "./settings.js";
+import { writeAuditLog } from "./audit.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const FIRST_ADMIN_PROPERTY = "moolah:first_admin_assigned";
@@ -111,6 +112,7 @@ function assignFirstEconomyAdmin(player) {
     player.sendMessage(
       "You are the first player in this world and have been granted economy admin access.",
     );
+    writeAuditLog("admin", "First Admin Assigned", player, "Granted the econ_admin tag automatically.");
   } catch (error) {
     console.error(
       `[Moolah] Could not assign the first economy admin: ${error?.stack ?? error}`,
@@ -154,6 +156,7 @@ function applyDeathTax(player) {
     }
 
     player.setDynamicProperty(LAST_DEATH_TAX_PROPERTY, now);
+    writeAuditLog("admin", "Death Tax Charged", player, `${charged} Moolah charged; ${settings.deathTax - charged} Moolah uncollected.`);
   } catch (error) {
     if (charged > 0) {
       try {
@@ -220,6 +223,8 @@ function awardTaxRefund(player) {
     );
     return false;
   }
+
+  writeAuditLog("admin", "Tax Return Created", player, `${refund} Moolah reserved from the Tax Pool for this player.`);
 
   return true;
 }
