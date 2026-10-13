@@ -1088,6 +1088,10 @@ function parseRadius(value) {
 }
 
 export function registerClaimCommand(commandRegistry) {
+  commandRegistry.registerEnum(
+    "moolah:claim_action",
+    ["add", "remove", "invite", "deinvite", "toggle", "info", "walk"],
+  );
   commandRegistry.registerCommand(
     {
       name: "moolah:claim",
@@ -1095,7 +1099,7 @@ export function registerClaimCommand(commandRegistry) {
       permissionLevel: CommandPermissionLevel.Any,
       cheatsRequired: false,
       optionalParameters: [
-        { type: CustomCommandParamType.String, name: "action" },
+        { type: CustomCommandParamType.Enum, name: "moolah:claim_action" },
         { type: CustomCommandParamType.String, name: "value" },
       ],
     },

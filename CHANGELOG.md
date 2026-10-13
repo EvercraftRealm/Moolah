@@ -5,6 +5,7 @@
 - Changed claim actionbar notices to trigger only when claim ownership changes.
 - Added notices for leaving a claimed area and combined notices when moving
   directly between areas owned by different players.
+- Fixed `/claim add <radius>` and `/claim remove <radius>` command parsing.
 
 ## 1.1.0 - 2026-10-12
 
