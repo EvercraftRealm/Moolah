@@ -103,7 +103,7 @@ When enabled by an economy admin, claims protect entire chunks from sky to bedro
 
 Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Explosions do not destroy protected blocks. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.
 
-Entering a claim shows its owner in the actionbar. Economy admins can remove another player's claims by standing in one and using the normal remove command; administrative removals never issue refunds.
+Entering or leaving a claimed area shows its owner in the actionbar. Moving between adjacent chunks owned by the same player does not repeat the message. Economy admins can remove another player's claims by standing in one and using the normal remove command; administrative removals never issue refunds.
 
 ## QuickPay signs
 

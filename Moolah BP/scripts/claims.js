@@ -30,7 +30,7 @@ const shardCache = new Map();
 const profileCache = new Map();
 const claimLocks = new Set();
 const walkSessions = new Map();
-const lastPlayerChunks = new Map();
+const lastPlayerClaimStates = new Map();
 const claimActionbarUntil = new Map();
 const denialCooldowns = new Map();
 const fireQueue = [];
@@ -866,6 +866,10 @@ function updateWalkSessions() {
   }
 }
 
+function claimAreaLabel(state) {
+  return state.isOwn ? "your claim" : `${state.ownerName}'s claim`;
+}
+
 function updateClaimEntryMessages() {
   const settings = getEconomySettings();
   const onlineIds = new Set();
@@ -873,23 +877,51 @@ function updateClaimEntryMessages() {
     onlineIds.add(player.id);
     const chunk = getChunk(player.location);
     const currentKey = chunkKey(player.dimension.id, chunk.x, chunk.z);
-    const previousKey = lastPlayerChunks.get(player.id);
-    lastPlayerChunks.set(player.id, currentKey);
-    if (!settings.allowClaims || currentKey === previousKey) continue;
+    const previousState = lastPlayerClaimStates.get(player.id);
+
+    if (!settings.allowClaims) {
+      lastPlayerClaimStates.set(player.id, {
+        chunkKey: currentKey,
+        claim: undefined,
+        claimsDisabled: true,
+      });
+      continue;
+    }
+    if (currentKey === previousState?.chunkKey && !previousState.claimsDisabled) continue;
 
     const claim = getClaim(player.dimension.id, chunk.x, chunk.z);
-    if (!claim) continue;
-    player.onScreenDisplay.setActionBar(
-      isOwner(player, claim)
-        ? "You have entered your claim."
-        : `You have entered ${claim.ownerName}'s claim.`,
-    );
+    const currentState = {
+      chunkKey: currentKey,
+      claim: claim ? {
+        ownerKey: claim.ownerKey,
+        ownerName: claim.ownerName,
+        isOwn: isOwner(player, claim),
+      } : undefined,
+    };
+    lastPlayerClaimStates.set(player.id, currentState);
+
+    const previousClaim = previousState?.claim;
+    const currentClaim = currentState.claim;
+    if (previousClaim?.ownerKey === currentClaim?.ownerKey) continue;
+
+    let message;
+    if (previousClaim && currentClaim) {
+      message = `You have left ${claimAreaLabel(previousClaim)} and entered ${claimAreaLabel(currentClaim)}.`;
+    } else if (currentClaim) {
+      message = `You have entered ${claimAreaLabel(currentClaim)}.`;
+    } else if (previousClaim) {
+      message = `You have left ${claimAreaLabel(previousClaim)}.`;
+    } else {
+      continue;
+    }
+
+    player.onScreenDisplay.setActionBar(message);
     claimActionbarUntil.set(player.id, system.currentTick + ENTRY_MESSAGE_TICKS);
   }
 
-  for (const playerId of lastPlayerChunks.keys()) {
+  for (const playerId of lastPlayerClaimStates.keys()) {
     if (!onlineIds.has(playerId)) {
-      lastPlayerChunks.delete(playerId);
+      lastPlayerClaimStates.delete(playerId);
       claimActionbarUntil.delete(playerId);
       denialCooldowns.delete(playerId);
       ownerKeyCache.delete(playerId);

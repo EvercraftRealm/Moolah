@@ -430,7 +430,7 @@ function openShop(player) {
   }
 
   if (settings.allowClaims) {
-    shopForm.button("Claims");
+    shopForm.button("Claims", `${BANK_ICON_ROOT}/claims`);
     menuActions.push("claims");
   }
 

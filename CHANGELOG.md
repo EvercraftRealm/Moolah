@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 - 2026-10-12
+
+- Changed claim actionbar notices to trigger only when claim ownership changes.
+- Added notices for leaving a claimed area and combined notices when moving
+  directly between areas owned by different players.
+
 ## 1.1.0 - 2026-10-12
 
 - Added an optional chunk claim and protection system, disabled by default.
