@@ -8,6 +8,8 @@
   menu so unprotected settings are easier to identify.
 - Added `/claim view` and a Claims-menu toggle that displays nearby claim
   boundaries with player-only green and red particles.
+- Deferred claim-border color initialization until normal world execution to
+  prevent an early-execution startup error.
 
 ## 1.1.1 - 2026-10-12
 

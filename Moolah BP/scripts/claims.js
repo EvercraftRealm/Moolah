@@ -50,11 +50,10 @@ const denialCooldowns = new Map();
 const fireQueue = [];
 const queuedFireTasks = new Set();
 const ownerKeyCache = new Map();
-const ownClaimBorderColor = new MolangVariableMap();
-const otherClaimBorderColor = new MolangVariableMap();
-ownClaimBorderColor.setColorRGB("variable.color", { red: 0.15, green: 1, blue: 0.15 });
-otherClaimBorderColor.setColorRGB("variable.color", { red: 1, green: 0.1, blue: 0.1 });
+let ownClaimBorderColor;
+let otherClaimBorderColor;
 let initialized = false;
+let claimViewColorWarningShown = false;
 let claimViewParticleWarningShown = false;
 
 function formatAmount(value) {
@@ -1049,6 +1048,25 @@ function toggleClaimView(player) {
   player.sendMessage("Claim border view enabled. Green borders are yours; red borders belong to other players. Run /claim view again to exit.");
 }
 
+function initializeClaimViewColors() {
+  if (ownClaimBorderColor && otherClaimBorderColor) return true;
+  try {
+    ownClaimBorderColor = new MolangVariableMap();
+    otherClaimBorderColor = new MolangVariableMap();
+    ownClaimBorderColor.setColorRGB("variable.color", { red: 0.15, green: 1, blue: 0.15 });
+    otherClaimBorderColor.setColorRGB("variable.color", { red: 1, green: 0.1, blue: 0.1 });
+    return true;
+  } catch (error) {
+    ownClaimBorderColor = undefined;
+    otherClaimBorderColor = undefined;
+    if (!claimViewColorWarningShown) {
+      claimViewColorWarningShown = true;
+      console.warn(`[Moolah Claims] Claim border colors could not be initialized: ${error}`);
+    }
+    return false;
+  }
+}
+
 function spawnClaimViewParticle(player, location, color, budget) {
   if (budget.count >= CLAIM_VIEW_MAX_PARTICLES) return;
   const dx = location.x - budget.originX;
@@ -1127,6 +1145,16 @@ function updateClaimViews() {
     for (const player of players) {
       if (claimViewPlayers.delete(player.id)) {
         player.sendMessage("Claim border view was disabled because claims are disabled.");
+      }
+    }
+    claimViewPlayers.clear();
+    return;
+  }
+
+  if (!initializeClaimViewColors()) {
+    for (const player of players) {
+      if (claimViewPlayers.has(player.id)) {
+        player.sendMessage("Claim border view is unavailable right now.");
       }
     }
     claimViewPlayers.clear();
