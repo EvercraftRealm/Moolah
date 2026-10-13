@@ -102,7 +102,7 @@ The **Claim Radius** menu supports radii 1 through 9 and shows the resulting squ
 - `/claim deinvite` opens a dropdown containing your currently invited friends.
 - `/claim toggle` opens the fire-tick and explosion controls for the current chunk.
 - `/claim info` shows the current chunk's owner, globally invited friends, and protection settings.
-- `/claim view` toggles nearby claim-border particles. Green borders are yours and red borders belong to other players; run the command again to exit.
+- `/claim view` toggles claim-border particles across loaded simulation-distance chunks. Green borders are yours, red borders belong to other players, and grey borders are unclaimed; run the command again to exit.
 - `/claim walk` records each unique unclaimed chunk you enter. Crouch three separate times quickly to finish, then confirm the combined cost. Walk & Claim is limited to 512 selected chunks per session.
 
 Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Explosions do not destroy protected blocks. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.

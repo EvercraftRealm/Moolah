@@ -10,6 +10,8 @@
   boundaries with player-only green and red particles.
 - Deferred claim-border color initialization until normal world execution to
   prevent an early-execution startup error.
+- Expanded claim-border visualization across loaded simulation-distance chunks
+  and added grey borders for unclaimed chunks.
 
 ## 1.1.1 - 2026-10-12
 

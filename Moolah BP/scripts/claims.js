@@ -24,9 +24,10 @@ const FIRE_SLICE_HEIGHT = 32;
 const FIRE_TASKS_PER_TICK = 2;
 const FIRE_QUEUE_LIMIT = 2048;
 const MAX_FRIENDS = 64;
-const CLAIM_VIEW_RADIUS_CHUNKS = 1;
-const CLAIM_VIEW_PARTICLE_STEP = 4;
-const CLAIM_VIEW_MAX_PARTICLES = 96;
+const CLAIM_VIEW_RADIUS_CHUNKS = 12;
+const CLAIM_VIEW_NEAR_RADIUS_CHUNKS = 2;
+const CLAIM_VIEW_MID_RADIUS_CHUNKS = 5;
+const CLAIM_VIEW_MAX_PARTICLES = 2200;
 const CLAIM_VIEW_OFFSETS = [];
 for (let x = -CLAIM_VIEW_RADIUS_CHUNKS; x <= CLAIM_VIEW_RADIUS_CHUNKS; x++) {
   for (let z = -CLAIM_VIEW_RADIUS_CHUNKS; z <= CLAIM_VIEW_RADIUS_CHUNKS; z++) {
@@ -52,6 +53,7 @@ const queuedFireTasks = new Set();
 const ownerKeyCache = new Map();
 let ownClaimBorderColor;
 let otherClaimBorderColor;
+let unclaimedBorderColor;
 let initialized = false;
 let claimViewColorWarningShown = false;
 let claimViewParticleWarningShown = false;
@@ -1045,20 +1047,23 @@ function toggleClaimView(player) {
     return;
   }
   claimViewPlayers.add(player.id);
-  player.sendMessage("Claim border view enabled. Green borders are yours; red borders belong to other players. Run /claim view again to exit.");
+  player.sendMessage("Claim border view enabled. Green borders are yours, red borders belong to other players, and grey borders are unclaimed. Run /claim view again to exit.");
 }
 
 function initializeClaimViewColors() {
-  if (ownClaimBorderColor && otherClaimBorderColor) return true;
+  if (ownClaimBorderColor && otherClaimBorderColor && unclaimedBorderColor) return true;
   try {
     ownClaimBorderColor = new MolangVariableMap();
     otherClaimBorderColor = new MolangVariableMap();
+    unclaimedBorderColor = new MolangVariableMap();
     ownClaimBorderColor.setColorRGB("variable.color", { red: 0.15, green: 1, blue: 0.15 });
     otherClaimBorderColor.setColorRGB("variable.color", { red: 1, green: 0.1, blue: 0.1 });
+    unclaimedBorderColor.setColorRGB("variable.color", { red: 0.55, green: 0.55, blue: 0.55 });
     return true;
   } catch (error) {
     ownClaimBorderColor = undefined;
     otherClaimBorderColor = undefined;
+    unclaimedBorderColor = undefined;
     if (!claimViewColorWarningShown) {
       claimViewColorWarningShown = true;
       console.warn(`[Moolah Claims] Claim border colors could not be initialized: ${error}`);
@@ -1069,9 +1074,6 @@ function initializeClaimViewColors() {
 
 function spawnClaimViewParticle(player, location, color, budget) {
   if (budget.count >= CLAIM_VIEW_MAX_PARTICLES) return;
-  const dx = location.x - budget.originX;
-  const dz = location.z - budget.originZ;
-  if (dx * dx + dz * dz > 40 * 40) return;
   try {
     player.spawnParticle("minecraft:colored_flame_particle", location, color);
     budget.count++;
@@ -1084,11 +1086,21 @@ function spawnClaimViewParticle(player, location, color, budget) {
   }
 }
 
-function drawClaimViewLine(player, from, to, y, color, budget) {
-  const distance = Math.max(Math.abs(to.x - from.x), Math.abs(to.z - from.z));
-  const steps = Math.ceil(distance / CLAIM_VIEW_PARTICLE_STEP);
-  for (let step = 0; step <= steps && budget.count < CLAIM_VIEW_MAX_PARTICLES; step++) {
-    const progress = steps === 0 ? 0 : step / steps;
+function claimViewState(player, claim) {
+  if (!claim) return { key: "unclaimed", color: unclaimedBorderColor };
+  if (isOwner(player, claim)) return { key: "own", color: ownClaimBorderColor };
+  return { key: `other:${claim.ownerKey}`, color: otherClaimBorderColor };
+}
+
+function claimViewSamples(distanceChunks) {
+  if (distanceChunks <= CLAIM_VIEW_NEAR_RADIUS_CHUNKS) return 5;
+  if (distanceChunks <= CLAIM_VIEW_MID_RADIUS_CHUNKS) return 3;
+  return 1;
+}
+
+function drawClaimViewLine(player, from, to, y, color, budget, samples) {
+  for (let sample = 0; sample < samples && budget.count < CLAIM_VIEW_MAX_PARTICLES; sample++) {
+    const progress = samples === 1 ? 0.5 : sample / (samples - 1);
     spawnClaimViewParticle(player, {
       x: from.x + (to.x - from.x) * progress,
       y,
@@ -1097,42 +1109,119 @@ function drawClaimViewLine(player, from, to, y, color, budget) {
   }
 }
 
-function drawClaimChunkBorders(player, chunk, claim, y, budget, exposedOnly) {
-  const minX = chunk.x * 16;
-  const minZ = chunk.z * 16;
-  const maxX = minX + 16;
-  const maxZ = minZ + 16;
-  const dimensionId = player.dimension.id;
-  const color = isOwner(player, claim) ? ownClaimBorderColor : otherClaimBorderColor;
-  const edges = [
-    {
-      neighbor: { x: chunk.x, z: chunk.z - 1 },
-      from: { x: minX + 0.1, z: minZ + 0.05 },
-      to: { x: maxX - 0.1, z: minZ + 0.05 },
-    },
-    {
-      neighbor: { x: chunk.x, z: chunk.z + 1 },
-      from: { x: minX + 0.1, z: maxZ - 0.05 },
-      to: { x: maxX - 0.1, z: maxZ - 0.05 },
-    },
-    {
-      neighbor: { x: chunk.x - 1, z: chunk.z },
-      from: { x: minX + 0.05, z: minZ + 0.1 },
-      to: { x: minX + 0.05, z: maxZ - 0.1 },
-    },
-    {
-      neighbor: { x: chunk.x + 1, z: chunk.z },
-      from: { x: maxX - 0.05, z: minZ + 0.1 },
-      to: { x: maxX - 0.05, z: maxZ - 0.1 },
-    },
-  ];
+function offsetClaimViewLine(from, to, offset) {
+  return {
+    from: { x: from.x + offset.x, z: from.z + offset.z },
+    to: { x: to.x + offset.x, z: to.z + offset.z },
+  };
+}
 
-  for (const edge of edges) {
-    if (exposedOnly) {
-      const neighbor = getClaim(dimensionId, edge.neighbor.x, edge.neighbor.z);
-      if (neighbor?.ownerKey === claim.ownerKey) continue;
+function drawClaimViewEdge(player, from, to, y, state, neighborState, inward, budget, samples) {
+  if (!neighborState || neighborState.key === state.key) {
+    drawClaimViewLine(player, from, to, y, state.color, budget, samples);
+    return;
+  }
+
+  const inside = offsetClaimViewLine(from, to, { x: inward.x * 0.08, z: inward.z * 0.08 });
+  const outside = offsetClaimViewLine(from, to, { x: inward.x * -0.08, z: inward.z * -0.08 });
+  drawClaimViewLine(player, inside.from, inside.to, y, state.color, budget, samples);
+  drawClaimViewLine(player, outside.from, outside.to, y, neighborState.color, budget, samples);
+}
+
+function loadedClaimViewChunks(player, center) {
+  const chunks = new Map();
+  for (const offset of CLAIM_VIEW_OFFSETS) {
+    const x = center.x + offset.x;
+    const z = center.z + offset.z;
+    let loaded = false;
+    try {
+      loaded = player.dimension.isChunkLoaded({
+        x: x * 16 + 8,
+        y: player.location.y,
+        z: z * 16 + 8,
+      });
+    } catch {
+      loaded = false;
     }
-    drawClaimViewLine(player, edge.from, edge.to, y, color, budget);
+    if (!loaded) continue;
+    const claim = getClaim(player.dimension.id, x, z);
+    chunks.set(`${x},${z}`, {
+      x,
+      z,
+      distance: Math.max(Math.abs(offset.x), Math.abs(offset.z)),
+      state: claimViewState(player, claim),
+    });
+  }
+  return chunks;
+}
+
+function drawLoadedClaimViewChunks(player, center, chunks, y, budget) {
+  for (const offset of CLAIM_VIEW_OFFSETS) {
+    if (budget.count >= CLAIM_VIEW_MAX_PARTICLES) return;
+    const x = center.x + offset.x;
+    const z = center.z + offset.z;
+    const chunk = chunks.get(`${x},${z}`);
+    if (!chunk) continue;
+
+    const minX = x * 16;
+    const minZ = z * 16;
+    const maxX = minX + 16;
+    const maxZ = minZ + 16;
+    const samples = claimViewSamples(chunk.distance);
+    const north = chunks.get(`${x},${z - 1}`);
+    const west = chunks.get(`${x - 1},${z}`);
+    const south = chunks.get(`${x},${z + 1}`);
+    const east = chunks.get(`${x + 1},${z}`);
+
+    drawClaimViewEdge(
+      player,
+      { x: minX + 0.1, z: minZ },
+      { x: maxX - 0.1, z: minZ },
+      y,
+      chunk.state,
+      north?.state,
+      { x: 0, z: 1 },
+      budget,
+      samples,
+    );
+    drawClaimViewEdge(
+      player,
+      { x: minX, z: minZ + 0.1 },
+      { x: minX, z: maxZ - 0.1 },
+      y,
+      chunk.state,
+      west?.state,
+      { x: 1, z: 0 },
+      budget,
+      samples,
+    );
+
+    if (!south) {
+      drawClaimViewEdge(
+        player,
+        { x: minX + 0.1, z: maxZ - 0.05 },
+        { x: maxX - 0.1, z: maxZ - 0.05 },
+        y,
+        chunk.state,
+        undefined,
+        { x: 0, z: -1 },
+        budget,
+        samples,
+      );
+    }
+    if (!east) {
+      drawClaimViewEdge(
+        player,
+        { x: maxX - 0.05, z: minZ + 0.1 },
+        { x: maxX - 0.05, z: maxZ - 0.1 },
+        y,
+        chunk.state,
+        undefined,
+        { x: -1, z: 0 },
+        budget,
+        samples,
+      );
+    }
   }
 }
 
@@ -1169,18 +1258,9 @@ function updateClaimViews() {
     if (!claimViewPlayers.has(player.id)) continue;
     const center = getChunk(player.location);
     const y = player.location.y + 0.15;
-    const budget = { count: 0, originX: player.location.x, originZ: player.location.z };
-
-    for (const offset of CLAIM_VIEW_OFFSETS) {
-      const chunk = { x: center.x + offset.x, z: center.z + offset.z };
-      const claim = getClaim(player.dimension.id, chunk.x, chunk.z);
-      if (claim) drawClaimChunkBorders(player, chunk, claim, y, budget, true);
-    }
-
-    if (budget.count === 0) {
-      const currentClaim = getClaim(player.dimension.id, center.x, center.z);
-      if (currentClaim) drawClaimChunkBorders(player, center, currentClaim, y, budget, false);
-    }
+    const budget = { count: 0 };
+    const chunks = loadedClaimViewChunks(player, center);
+    drawLoadedClaimViewChunks(player, center, chunks, y, budget);
   }
 }
 
@@ -1552,7 +1632,7 @@ export function initializeClaimSystem() {
   });
 
   system.runInterval(updateWalkSessions, 2);
-  system.runInterval(updateClaimViews, 10);
+  system.runInterval(updateClaimViews, 20);
   system.runInterval(updateClaimEntryMessages, 10);
   system.runInterval(enqueueFireScanTasks, 40);
   system.runInterval(processFireScanQueue, 1);
