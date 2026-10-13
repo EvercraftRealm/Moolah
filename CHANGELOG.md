@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.2 - 2026-10-12
+## 1.1.2 - 2026-10-13
 
 - Replaced the fixed radius-3 and radius-5 claim menu entries with one
   **Claim Radius** dialog supporting every radius from 1 through 9.
