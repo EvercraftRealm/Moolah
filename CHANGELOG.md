@@ -12,6 +12,8 @@
   prevent an early-execution startup error.
 - Expanded claim-border visualization across loaded simulation-distance chunks
   and added grey borders for unclaimed chunks.
+- Reorganized the Claims menu into focused **Claim Land** and **Manage Friends**
+  submenus.
 
 ## 1.1.1 - 2026-10-12
 

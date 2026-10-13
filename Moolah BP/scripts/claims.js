@@ -1446,6 +1446,46 @@ function processFireScanQueue() {
   }
 }
 
+function openClaimLandMenu(player, onBack) {
+  const form = new ActionFormData()
+    .title("Claim Land")
+    .body("Claims protect chunks from other players.")
+    .button("Claim Current Chunk")
+    .button("Claim Radius")
+    .button("Walk & Claim")
+    .button("Unclaim Current Chunk");
+
+  form.show(player).then((response) => {
+    if (response.canceled || response.selection === undefined) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const returnToClaimLand = () => openClaimLandMenu(player, onBack);
+    if (response.selection === 0) system.run(() => confirmClaimAdd(player, 0, returnToClaimLand));
+    if (response.selection === 1) system.run(() => openClaimRadiusMenu(player, returnToClaimLand));
+    if (response.selection === 2) system.run(() => startWalkMode(player));
+    if (response.selection === 3) system.run(() => confirmClaimRemove(player, 0, returnToClaimLand));
+  }).catch(() => player.sendMessage("The Claim Land menu could not be opened."));
+}
+
+function openClaimFriendsMenu(player, onBack) {
+  const form = new ActionFormData()
+    .title("Manage Friends")
+    .body("Friend invitations apply to all chunks you own.")
+    .button("Add Friend")
+    .button("Remove Friend");
+
+  form.show(player).then((response) => {
+    if (response.canceled || response.selection === undefined) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const returnToFriends = () => openClaimFriendsMenu(player, onBack);
+    if (response.selection === 0) system.run(() => openClaimInviteMenu(player, returnToFriends));
+    if (response.selection === 1) system.run(() => openClaimDeinviteMenu(player, returnToFriends));
+  }).catch(() => player.sendMessage("The Manage Friends menu could not be opened."));
+}
+
 export function openClaimMenu(player, onBack) {
   if (!getEconomySettings().allowClaims) {
     player.sendMessage("Claims are currently disabled.");
@@ -1455,16 +1495,11 @@ export function openClaimMenu(player, onBack) {
 
   const form = new ActionFormData()
     .title("Claims")
-    .body("Claims protect chunks from other players. Friend invitations apply to all chunks you own.")
-    .button("Claim Current Chunk")
-    .button("Claim Radius")
-    .button("Walk & Claim")
-    .button("Invite Friend")
-    .button("Remove Friend")
+    .button("Claim Land")
+    .button("Manage Friends")
     .button("Toggle Protections")
-    .button(claimViewPlayers.has(player.id) ? "Hide Claim Borders" : "View Claim Borders")
     .button("Claim Info")
-    .button("Unclaim Current Chunk");
+    .button(claimViewPlayers.has(player.id) ? "Hide Claim Borders" : "View Claim Borders");
 
   form.show(player).then((response) => {
     if (response.canceled || response.selection === undefined) {
@@ -1472,15 +1507,11 @@ export function openClaimMenu(player, onBack) {
       return;
     }
     const returnToClaims = () => openClaimMenu(player, onBack);
-    if (response.selection === 0) system.run(() => confirmClaimAdd(player, 0, returnToClaims));
-    if (response.selection === 1) system.run(() => openClaimRadiusMenu(player, returnToClaims));
-    if (response.selection === 2) system.run(() => startWalkMode(player));
-    if (response.selection === 3) system.run(() => openClaimInviteMenu(player, returnToClaims));
-    if (response.selection === 4) system.run(() => openClaimDeinviteMenu(player, returnToClaims));
-    if (response.selection === 5) system.run(() => openClaimToggleMenu(player, returnToClaims));
-    if (response.selection === 6) system.run(() => toggleClaimView(player));
-    if (response.selection === 7) system.run(() => showClaimInfo(player));
-    if (response.selection === 8) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
+    if (response.selection === 0) system.run(() => openClaimLandMenu(player, returnToClaims));
+    if (response.selection === 1) system.run(() => openClaimFriendsMenu(player, returnToClaims));
+    if (response.selection === 2) system.run(() => openClaimToggleMenu(player, returnToClaims));
+    if (response.selection === 3) system.run(() => showClaimInfo(player));
+    if (response.selection === 4) system.run(() => toggleClaimView(player));
   }).catch(() => player.sendMessage("The Claims menu could not be opened."));
 }
 
