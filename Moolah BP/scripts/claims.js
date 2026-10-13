@@ -856,8 +856,8 @@ function openClaimToggleMenu(player, onBack) {
   const form = new ActionFormData()
     .title("Claim Protection")
     .body(`Chunk ${center.x}, ${center.z}\nChoose a protection to toggle.`)
-    .button(`Fire Tick: ${claim.fireTick ? "Enabled" : "Protected"}`)
-    .button(`Explosions: ${claim.explosions ? "Enabled" : "Protected"}`);
+    .button(claim.fireTick ? "§cFire Tick: Enabled§r" : "Fire Tick: Protected")
+    .button(claim.explosions ? "§cExplosions: Enabled§r" : "Explosions: Protected");
 
   form.show(player).then((response) => {
     if (response.canceled || response.selection === undefined) {

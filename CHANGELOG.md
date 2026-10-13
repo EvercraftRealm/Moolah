@@ -4,6 +4,8 @@
 
 - Replaced the fixed radius-3 and radius-5 claim menu entries with one
   **Claim Radius** dialog supporting every radius from 1 through 9.
+- Highlighted enabled fire tick and explosions in red in the claim protection
+  menu so unprotected settings are easier to identify.
 
 ## 1.1.1 - 2026-10-12
 
