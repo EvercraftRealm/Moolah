@@ -4,6 +4,7 @@ import {
   CustomCommandParamType,
   CustomCommandSource,
   CustomCommandStatus,
+  MolangVariableMap,
   system,
   world,
 } from "@minecraft/server";
@@ -23,6 +24,18 @@ const FIRE_SLICE_HEIGHT = 32;
 const FIRE_TASKS_PER_TICK = 2;
 const FIRE_QUEUE_LIMIT = 2048;
 const MAX_FRIENDS = 64;
+const CLAIM_VIEW_RADIUS_CHUNKS = 1;
+const CLAIM_VIEW_PARTICLE_STEP = 4;
+const CLAIM_VIEW_MAX_PARTICLES = 96;
+const CLAIM_VIEW_OFFSETS = [];
+for (let x = -CLAIM_VIEW_RADIUS_CHUNKS; x <= CLAIM_VIEW_RADIUS_CHUNKS; x++) {
+  for (let z = -CLAIM_VIEW_RADIUS_CHUNKS; z <= CLAIM_VIEW_RADIUS_CHUNKS; z++) {
+    CLAIM_VIEW_OFFSETS.push({ x, z });
+  }
+}
+CLAIM_VIEW_OFFSETS.sort((left, right) => (
+  left.x * left.x + left.z * left.z - (right.x * right.x + right.z * right.z)
+));
 const FIRE_DAMAGE_CAUSES = new Set(["fire", "firetick", "campfire", "soulcampfire", "lava"]);
 const EXPLOSION_DAMAGE_CAUSES = new Set(["blockexplosion", "entityexplosion"]);
 
@@ -30,13 +43,19 @@ const shardCache = new Map();
 const profileCache = new Map();
 const claimLocks = new Set();
 const walkSessions = new Map();
+const claimViewPlayers = new Set();
 const lastPlayerClaimStates = new Map();
 const claimActionbarUntil = new Map();
 const denialCooldowns = new Map();
 const fireQueue = [];
 const queuedFireTasks = new Set();
 const ownerKeyCache = new Map();
+const ownClaimBorderColor = new MolangVariableMap();
+const otherClaimBorderColor = new MolangVariableMap();
+ownClaimBorderColor.setColorRGB("variable.color", { red: 0.15, green: 1, blue: 0.15 });
+otherClaimBorderColor.setColorRGB("variable.color", { red: 1, green: 0.1, blue: 0.1 });
 let initialized = false;
+let claimViewParticleWarningShown = false;
 
 function formatAmount(value) {
   return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -1021,6 +1040,122 @@ function updateWalkSessions() {
   }
 }
 
+function toggleClaimView(player) {
+  if (claimViewPlayers.delete(player.id)) {
+    player.sendMessage("Claim border view disabled.");
+    return;
+  }
+  claimViewPlayers.add(player.id);
+  player.sendMessage("Claim border view enabled. Green borders are yours; red borders belong to other players. Run /claim view again to exit.");
+}
+
+function spawnClaimViewParticle(player, location, color, budget) {
+  if (budget.count >= CLAIM_VIEW_MAX_PARTICLES) return;
+  const dx = location.x - budget.originX;
+  const dz = location.z - budget.originZ;
+  if (dx * dx + dz * dz > 40 * 40) return;
+  try {
+    player.spawnParticle("minecraft:colored_flame_particle", location, color);
+    budget.count++;
+  } catch (error) {
+    budget.count = CLAIM_VIEW_MAX_PARTICLES;
+    if (!claimViewParticleWarningShown) {
+      claimViewParticleWarningShown = true;
+      console.warn(`[Moolah Claims] Claim border particle could not be shown: ${error}`);
+    }
+  }
+}
+
+function drawClaimViewLine(player, from, to, y, color, budget) {
+  const distance = Math.max(Math.abs(to.x - from.x), Math.abs(to.z - from.z));
+  const steps = Math.ceil(distance / CLAIM_VIEW_PARTICLE_STEP);
+  for (let step = 0; step <= steps && budget.count < CLAIM_VIEW_MAX_PARTICLES; step++) {
+    const progress = steps === 0 ? 0 : step / steps;
+    spawnClaimViewParticle(player, {
+      x: from.x + (to.x - from.x) * progress,
+      y,
+      z: from.z + (to.z - from.z) * progress,
+    }, color, budget);
+  }
+}
+
+function drawClaimChunkBorders(player, chunk, claim, y, budget, exposedOnly) {
+  const minX = chunk.x * 16;
+  const minZ = chunk.z * 16;
+  const maxX = minX + 16;
+  const maxZ = minZ + 16;
+  const dimensionId = player.dimension.id;
+  const color = isOwner(player, claim) ? ownClaimBorderColor : otherClaimBorderColor;
+  const edges = [
+    {
+      neighbor: { x: chunk.x, z: chunk.z - 1 },
+      from: { x: minX + 0.1, z: minZ + 0.05 },
+      to: { x: maxX - 0.1, z: minZ + 0.05 },
+    },
+    {
+      neighbor: { x: chunk.x, z: chunk.z + 1 },
+      from: { x: minX + 0.1, z: maxZ - 0.05 },
+      to: { x: maxX - 0.1, z: maxZ - 0.05 },
+    },
+    {
+      neighbor: { x: chunk.x - 1, z: chunk.z },
+      from: { x: minX + 0.05, z: minZ + 0.1 },
+      to: { x: minX + 0.05, z: maxZ - 0.1 },
+    },
+    {
+      neighbor: { x: chunk.x + 1, z: chunk.z },
+      from: { x: maxX - 0.05, z: minZ + 0.1 },
+      to: { x: maxX - 0.05, z: maxZ - 0.1 },
+    },
+  ];
+
+  for (const edge of edges) {
+    if (exposedOnly) {
+      const neighbor = getClaim(dimensionId, edge.neighbor.x, edge.neighbor.z);
+      if (neighbor?.ownerKey === claim.ownerKey) continue;
+    }
+    drawClaimViewLine(player, edge.from, edge.to, y, color, budget);
+  }
+}
+
+function updateClaimViews() {
+  if (claimViewPlayers.size === 0) return;
+  const players = world.getPlayers();
+  const onlineIds = new Set(players.map((player) => player.id));
+
+  if (!getEconomySettings().allowClaims) {
+    for (const player of players) {
+      if (claimViewPlayers.delete(player.id)) {
+        player.sendMessage("Claim border view was disabled because claims are disabled.");
+      }
+    }
+    claimViewPlayers.clear();
+    return;
+  }
+
+  for (const playerId of claimViewPlayers) {
+    if (!onlineIds.has(playerId)) claimViewPlayers.delete(playerId);
+  }
+
+  for (const player of players) {
+    if (!claimViewPlayers.has(player.id)) continue;
+    const center = getChunk(player.location);
+    const y = player.location.y + 0.15;
+    const budget = { count: 0, originX: player.location.x, originZ: player.location.z };
+
+    for (const offset of CLAIM_VIEW_OFFSETS) {
+      const chunk = { x: center.x + offset.x, z: center.z + offset.z };
+      const claim = getClaim(player.dimension.id, chunk.x, chunk.z);
+      if (claim) drawClaimChunkBorders(player, chunk, claim, y, budget, true);
+    }
+
+    if (budget.count === 0) {
+      const currentClaim = getClaim(player.dimension.id, center.x, center.z);
+      if (currentClaim) drawClaimChunkBorders(player, center, currentClaim, y, budget, false);
+    }
+  }
+}
+
 function claimAreaLabel(state) {
   return state.isOwn ? "your claim" : `${state.ownerName}'s claim`;
 }
@@ -1219,6 +1354,7 @@ export function openClaimMenu(player, onBack) {
     .button("Invite Friend")
     .button("Remove Friend")
     .button("Toggle Protections")
+    .button(claimViewPlayers.has(player.id) ? "Hide Claim Borders" : "View Claim Borders")
     .button("Claim Info")
     .button("Unclaim Current Chunk");
 
@@ -1234,8 +1370,9 @@ export function openClaimMenu(player, onBack) {
     if (response.selection === 3) system.run(() => openClaimInviteMenu(player, returnToClaims));
     if (response.selection === 4) system.run(() => openClaimDeinviteMenu(player, returnToClaims));
     if (response.selection === 5) system.run(() => openClaimToggleMenu(player, returnToClaims));
-    if (response.selection === 6) system.run(() => showClaimInfo(player));
-    if (response.selection === 7) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
+    if (response.selection === 6) system.run(() => toggleClaimView(player));
+    if (response.selection === 7) system.run(() => showClaimInfo(player));
+    if (response.selection === 8) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
   }).catch(() => player.sendMessage("The Claims menu could not be opened."));
 }
 
@@ -1249,7 +1386,7 @@ function parseRadius(value) {
 export function registerClaimCommand(commandRegistry) {
   commandRegistry.registerEnum(
     "moolah:claim_action",
-    ["add", "remove", "invite", "deinvite", "toggle", "info", "walk"],
+    ["add", "remove", "invite", "deinvite", "toggle", "info", "walk", "view"],
   );
   commandRegistry.registerCommand(
     {
@@ -1322,10 +1459,14 @@ export function registerClaimCommand(commandRegistry) {
         system.run(() => startWalkMode(player));
         return { status: CustomCommandStatus.Success };
       }
+      if (action === "view" && value === undefined) {
+        system.run(() => toggleClaimView(player));
+        return { status: CustomCommandStatus.Success };
+      }
 
       return {
         status: CustomCommandStatus.Failure,
-        message: "Usage: /claim <add|remove> [radius] or /claim <invite|deinvite|toggle|info|walk>",
+        message: "Usage: /claim <add|remove> [radius] or /claim <invite|deinvite|toggle|info|walk|view>",
       };
     },
   );
@@ -1383,6 +1524,7 @@ export function initializeClaimSystem() {
   });
 
   system.runInterval(updateWalkSessions, 2);
+  system.runInterval(updateClaimViews, 10);
   system.runInterval(updateClaimEntryMessages, 10);
   system.runInterval(enqueueFireScanTasks, 40);
   system.runInterval(processFireScanQueue, 1);

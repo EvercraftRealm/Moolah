@@ -6,6 +6,8 @@
   **Claim Radius** dialog supporting every radius from 1 through 9.
 - Highlighted enabled fire tick and explosions in red in the claim protection
   menu so unprotected settings are easier to identify.
+- Added `/claim view` and a Claims-menu toggle that displays nearby claim
+  boundaries with player-only green and red particles.
 
 ## 1.1.1 - 2026-10-12
 
