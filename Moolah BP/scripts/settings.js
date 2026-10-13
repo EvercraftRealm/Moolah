@@ -2,6 +2,7 @@ import { world } from "@minecraft/server";
 
 const SETTINGS_PROPERTY = "moolah:economy_settings";
 const TAX_POOL_PROPERTY = "moolah:tax_pool";
+let cachedSettings;
 
 export const DEFAULT_ECONOMY_SETTINGS = Object.freeze({
   allowDeposit: true,
@@ -11,6 +12,7 @@ export const DEFAULT_ECONOMY_SETTINGS = Object.freeze({
   allowMail: true,
   allowMarket: true,
   allowWarp: false,
+  allowClaims: false,
   transferTaxRate: 0,
   withdrawTaxRate: 10,
   marketTaxRate: 10,
@@ -26,13 +28,20 @@ export const DEFAULT_ECONOMY_SETTINGS = Object.freeze({
   interdimensionalWarpMultiplier: 2,
   minWarpCost: undefined,
   maxWarpCost: undefined,
+  claimCostPerChunk: 10,
+  refundRemovedClaims: false,
   distributeTaxes: false,
 });
 
 export function getEconomySettings() {
+  if (cachedSettings) return cachedSettings;
+
   const value = world.getDynamicProperty(SETTINGS_PROPERTY);
 
-  if (typeof value !== "string") return { ...DEFAULT_ECONOMY_SETTINGS };
+  if (typeof value !== "string") {
+    cachedSettings = DEFAULT_ECONOMY_SETTINGS;
+    return cachedSettings;
+  }
 
   try {
     const stored = JSON.parse(value);
@@ -46,8 +55,10 @@ export function getEconomySettings() {
       "allowMail",
       "allowMarket",
       "allowWarp",
+      "allowClaims",
       "refundCanceledListingFees",
       "refundCanceledPostage",
+      "refundRemovedClaims",
       "distributeTaxes",
     ]) {
       if (typeof stored[key] === "boolean") settings[key] = stored[key];
@@ -118,6 +129,13 @@ export function getEconomySettings() {
     }
 
     if (
+      Number.isSafeInteger(stored.claimCostPerChunk)
+      && stored.claimCostPerChunk >= 0
+    ) {
+      settings.claimCostPerChunk = stored.claimCostPerChunk;
+    }
+
+    if (
       Number.isSafeInteger(stored.interdimensionalWarpMultiplier)
       && stored.interdimensionalWarpMultiplier >= 1
       && stored.interdimensionalWarpMultiplier <= 5
@@ -139,14 +157,18 @@ export function getEconomySettings() {
       settings.maxWarpCost = stored.maxWarpCost;
     }
 
-    return settings;
+    cachedSettings = Object.freeze(settings);
+    return cachedSettings;
   } catch {
-    return { ...DEFAULT_ECONOMY_SETTINGS };
+    cachedSettings = DEFAULT_ECONOMY_SETTINGS;
+    return cachedSettings;
   }
 }
 
 export function saveEconomySettings(settings) {
-  world.setDynamicProperty(SETTINGS_PROPERTY, JSON.stringify(settings));
+  const nextSettings = { ...settings };
+  world.setDynamicProperty(SETTINGS_PROPERTY, JSON.stringify(nextSettings));
+  cachedSettings = Object.freeze(nextSettings);
 }
 
 export function calculateTax(amount, taxRate) {

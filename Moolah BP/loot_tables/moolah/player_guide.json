@@ -21,6 +21,7 @@
                 "§lQuickPay Signs§r\n\nLine 1: !QuickPay\nLine 2: USERNAME\nLine 3: AMOUNT\nLine 4: DESCRIPTION\n\nUse a registered sign to create a payment. Always verify its details.",
                 "§lMarket§r\n\nUse §l/market§r to browse or manage listings.\n\n§l/buy§r opens browsing.\n§l/sell§r lists your held item.\n\nFees and taxes may apply.",
                 "§lWarp§r\n\nWhen enabled, use §l/warp§r to travel to a player, Spawn, or Home.\n\nDistance and dimension affect price. You always see a confirmation first.",
+                "§lClaims§r\n\nWhen enabled, use §l/claim§r to protect chunks. Purchases fund the Tax Pool.\n\nUse add, remove, info, invite, deinvite, toggle, or walk. Friend access applies to all your claims.",
                 "§lHelpful Notes§r\n\nHold a diamond to see your balance. Use §l/taxes§r to check the Tax Pool and your next return.\n\nFeatures and fees depend on world settings. For conflicts, prefix commands with §lmoolah:§r."
               ]
             }

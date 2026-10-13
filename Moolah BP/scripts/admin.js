@@ -27,6 +27,7 @@ export function openAdminMenu(player, onBack) {
     .button("General")
     .button("Tax Policy")
     .button("Market")
+    .button("Claims")
     .button("Warp")
     .button("Misc");
 
@@ -45,8 +46,10 @@ export function openAdminMenu(player, onBack) {
     } else if (response.selection === 2) {
       system.run(() => openMarketAdminMenu(player, returnToAdmin));
     } else if (response.selection === 3) {
-      system.run(() => openWarpAdminMenu(player, returnToAdmin));
+      system.run(() => openClaimsAdminMenu(player, returnToAdmin));
     } else if (response.selection === 4) {
+      system.run(() => openWarpAdminMenu(player, returnToAdmin));
+    } else if (response.selection === 5) {
       system.run(() => openMiscAdminMenu(player, returnToAdmin));
     }
   }).catch(() => {
@@ -256,6 +259,56 @@ function openMarketAdminMenu(player, onBack) {
     goBack(onBack);
   }).catch(() => {
     player.sendMessage("The Market settings menu could not be opened.");
+  });
+}
+
+function openClaimsAdminMenu(player, onBack) {
+  if (!canConfigureEconomy(player, onBack)) return;
+
+  const settings = getEconomySettings();
+  const form = new ModalFormData()
+    .title("Claims")
+    .toggle("Allow Claims", { defaultValue: settings.allowClaims })
+    .textField("Claim Cost per Chunk", "0 or more", {
+      defaultValue: String(settings.claimCostPerChunk),
+    })
+    .toggle("Refund Removed Claims", {
+      defaultValue: settings.refundRemovedClaims,
+    })
+    .submitButton("Save Claim Settings");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      goBack(onBack);
+      return;
+    }
+    if (!response.formValues || !canConfigureEconomy(player, onBack)) return;
+
+    const [allowClaims, claimCostValue, refundRemovedClaims] = response.formValues;
+    const claimCostText = typeof claimCostValue === "string"
+      ? claimCostValue.trim()
+      : "";
+    const claimCostPerChunk = Number(claimCostText);
+
+    if (
+      typeof allowClaims !== "boolean"
+      || typeof refundRemovedClaims !== "boolean"
+      || !/^\d+$/.test(claimCostText)
+      || !Number.isSafeInteger(claimCostPerChunk)
+    ) {
+      player.sendMessage("The Claim settings were invalid.");
+      return;
+    }
+
+    saveAdminSettings({
+      allowClaims,
+      claimCostPerChunk,
+      refundRemovedClaims,
+    });
+    player.sendMessage("Claim settings saved.");
+    goBack(onBack);
+  }).catch(() => {
+    player.sendMessage("The Claim settings menu could not be opened.");
   });
 }
 

@@ -5,7 +5,8 @@ Bedrock multiplayer. It digitizes diamonds at a fixed rate of 100 moolah per
 diamond instead of creating a fiat currency.
 
 Players can deposit and withdraw diamonds, transfer funds, use QuickPay signs,
-send mail, trade native items through a market, and optionally pay for warps.
+send mail, trade native items through a market, optionally pay for warps, and
+protect purchased chunks with the opt-in claim system.
 World owners can configure taxes and other economy controls without enabling
 cheats.
 
@@ -17,7 +18,7 @@ cheats.
    be available alongside it.
 4. Join the world and follow the Moolah Guide. Run `/bank` to open the menu.
 
-Moolah requires Minecraft Bedrock 1.21.120 or newer. Back up important worlds
+Moolah requires Minecraft Bedrock 1.26.10 or newer. Back up important worlds
 before installing or updating add-ons.
 
 ## Features
@@ -28,6 +29,7 @@ before installing or updating add-ons.
 - GUI market that preserves native item data
 - Configurable taxes and tax-return distribution
 - Optional distance-priced warps
+- Optional Moolah-priced chunk claims and protection
 - Achievement-friendly first-player administration
 
 For complete player and administrator documentation, see

@@ -21,6 +21,7 @@ If a short command is unavailable, use its namespaced version:
 - `/moolah:market`
 - `/moolah:buy`
 - `/moolah:sell`
+- `/moolah:claim`
 
 
 ## Moolah Menu
@@ -87,6 +88,22 @@ When enabled by an economy admin, choose **Warp** as the final option in the mai
 Warp prices are based on horizontal distance, rounded up to the next 100-block increment. Overworld-to-Nether travel converts Nether coordinates to their equivalent Overworld scale before measuring distance, accounting for Minecraft's 1:8 coordinate ratio. Travel between dimensions then uses the configured Interdimensional Multiplier. Economy admins may optionally set minimum and maximum Warp costs; leaving either field blank disables that limit. The confirmation screen shows the destination, priced distance, configured rate, dimension multiplier when applicable, configured limits, and final cost before anything is charged. Successful Warp costs move into the Tax Pool; failed teleports are refunded.
 
 When joining the world, players receive a color-coded summary if they have incoming items, outgoing Pending items, unclaimed Market proceeds, or active Market listings.
+
+### Claims
+
+When enabled by an economy admin, claims protect entire chunks from sky to bedrock. The default price is 10 Moolah per chunk, and every purchase is paid into the Tax Pool. Use **Claims** in the main menu or run `/claim`.
+
+- `/claim add` buys the current chunk after confirmation.
+- `/claim add <1-9>` buys a square radius centered on the current chunk. Radius 1 is 3×3; radius 9 is 19×19.
+- `/claim remove [1-9]` unclaims your chunks in the selected area after confirmation. Refunds are off by default and configurable by admins.
+- `/claim invite <username>` and `/claim deinvite <username>` manage access. Invitations apply to every chunk owned by the inviting player.
+- `/claim toggle firetick` and `/claim toggle explosions` change those protections for the current chunk.
+- `/claim info` shows the current chunk's owner, globally invited friends, and protection settings.
+- `/claim walk` records each unique unclaimed chunk you enter. Crouch three separate times quickly to finish, then confirm the combined cost. Walk & Claim is limited to 512 selected chunks per session.
+
+Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Explosions do not destroy protected blocks. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.
+
+Entering a claim shows its owner in the actionbar. Economy admins can remove another player's claims by standing in one and using the normal remove command; administrative removals never issue refunds.
 
 ## QuickPay signs
 
@@ -162,7 +179,7 @@ The purchase confirmation shows the listing price, Market tax, and final total. 
 
 Only players with the `econ_admin` tag can access the **Admin** menu. On a new world, Moolah automatically grants this tag to the first player who joins, once for the lifetime of that world. This gives vanilla Realm owners access without enabling cheats.
 
-The Admin menu is organized into five categories:
+The Admin menu is organized into six categories:
 
 - **General**
   - **Allow Deposit** — on by default
@@ -181,11 +198,15 @@ The Admin menu is organized into five categories:
 - **Market**
   - **Allow Market** — on by default; also controls `/market`, `/buy`, and `/sell`
   - **Max Market Listings** — 3 per player by default
-  - **Listing Fee** — 0 moolah by default
+  - **Listing Fee** — 10 moolah by default
   - **Refund Cancelled Listing Fees** — off by default
+- **Claims**
+  - **Allow Claims** — off by default; also controls `/claim`
+  - **Claim Cost per Chunk** — 10 moolah by default
+  - **Refund Removed Claims** — off by default; refunds are limited by available Tax Pool funds
 - **Misc**
   - **Allow Transfer Desc.** — on by default; controls descriptions in transfers and QuickPay
-  - **Postage Cost** — 3 moolah by default
+  - **Postage Cost** — 5 moolah by default
   - **Refund Cancelled Mail Postage** — on by default
 - **Warp**
   - **Allow Warp** — off by default; also controls `/warp`
@@ -206,7 +227,7 @@ Dedicated-server owners can grant additional admins from the server console with
 ## For world owners
 
 - This addon is achievement-friendly!
-- Minimum engine version: Minecraft Bedrock `1.21.120`
-- Script dependencies: `@minecraft/server` 2.1.0 and `@minecraft/server-ui` 2.0.0
+- Minimum engine version: Minecraft Bedrock `1.26.10`
+- Script dependencies: `@minecraft/server` 2.6.0 and `@minecraft/server-ui` 2.0.0
 - Market items use persistent private storage entities and should not be removed with broad entity-cleanup commands.
 - Back up important worlds before updating or removing economy add-ons.

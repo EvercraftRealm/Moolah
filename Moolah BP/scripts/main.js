@@ -18,6 +18,12 @@ import { openAdminMenu } from "./admin.js";
 import { openWarpMenu } from "./warp.js";
 import { giveFirstJoinGuide } from "./guide.js";
 import {
+  initializeClaimSystem,
+  isClaimActionbarActive,
+  openClaimMenu,
+  registerClaimCommand,
+} from "./claims.js";
+import {
   createSystemInboxMail,
   createSystemInboxPayment,
   confirmMaximumWithdrawal,
@@ -53,6 +59,8 @@ const CAMERA_ACTIVITY_EPSILON = 0.1;
 const BANK_ICON_ROOT = "textures/ui/moolah";
 const playersShowingBalance = new Set();
 const taxRefundSessions = new Map();
+
+initializeClaimSystem();
 
 function sendLoginNotifications(player) {
   const payments = getEscrowPayments();
@@ -348,16 +356,19 @@ function updateHeldDiamondBalances() {
     const inventory = getInventory(player);
     const heldItem = inventory?.getItem(player.selectedSlotIndex);
     const isHoldingDiamond = heldItem?.typeId === "minecraft:diamond";
+    const claimMessageActive = isClaimActionbarActive(player);
 
     if (isHoldingDiamond) {
       const refundTimer = settings.distributeTaxes
         ? ` | ${getTaxRefundTimerText(player, now)}`
         : "";
-      player.onScreenDisplay.setActionBar(
-        `Balance: \uE102${getBalance(player)}${refundTimer}`,
-      );
+      if (!claimMessageActive) {
+        player.onScreenDisplay.setActionBar(
+          `Balance: \uE102${getBalance(player)}${refundTimer}`,
+        );
+      }
       playersShowingBalance.add(player.id);
-    } else if (playersShowingBalance.delete(player.id)) {
+    } else if (playersShowingBalance.delete(player.id) && !claimMessageActive) {
       player.onScreenDisplay.setActionBar("");
     }
   }
@@ -418,6 +429,11 @@ function openShop(player) {
     menuActions.push("warp");
   }
 
+  if (settings.allowClaims) {
+    shopForm.button("Claims");
+    menuActions.push("claims");
+  }
+
   if (player.hasTag("econ_admin")) {
     shopForm.button("Admin", `${BANK_ICON_ROOT}/admin`);
     menuActions.push("admin");
@@ -447,6 +463,8 @@ function openShop(player) {
       system.run(() => openEscrowMenu(player, returnToShop));
     } else if (action === "warp") {
       system.run(() => openWarpMenu(player, returnToShop));
+    } else if (action === "claims") {
+      system.run(() => openClaimMenu(player, returnToShop));
     }
   }).catch(() => {
     player.sendMessage("The main menu could not be opened.");
@@ -471,6 +489,8 @@ function playerCommand(callback) {
 
 system.beforeEvents.startup.subscribe((event) => {
   const commandRegistry = event.customCommandRegistry;
+
+  registerClaimCommand(commandRegistry);
 
   commandRegistry.registerCommand(
     {
@@ -821,7 +841,7 @@ system.beforeEvents.startup.subscribe((event) => {
 });
 
 world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
-  if (!event.isFirstEvent) return;
+  if (event.cancel || !event.isFirstEvent) return;
 
   const quickPay = readQuickPaySign(event.block);
 
