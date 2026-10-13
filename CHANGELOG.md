@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 - 2026-10-12
+
+- Replaced the fixed radius-3 and radius-5 claim menu entries with one
+  **Claim Radius** dialog supporting every radius from 1 through 9.
+
 ## 1.1.1 - 2026-10-12
 
 - Changed claim actionbar notices to trigger only when claim ownership changes.

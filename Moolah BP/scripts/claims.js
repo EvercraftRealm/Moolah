@@ -869,6 +869,34 @@ function openClaimToggleMenu(player, onBack) {
   }).catch(() => player.sendMessage("The claim protection menu could not be opened."));
 }
 
+function openClaimRadiusMenu(player, onBack) {
+  const radii = Array.from({ length: 9 }, (_, index) => index + 1);
+  const form = new ModalFormData()
+    .title("Claim Radius")
+    .dropdown(
+      "Radius",
+      radii.map((radius) => {
+        const width = radius * 2 + 1;
+        return `Radius ${radius} (${width}x${width}, ${width * width} chunks)`;
+      }),
+      { defaultValueIndex: 0 },
+    )
+    .submitButton("Continue");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const selectedIndex = response.formValues?.[0];
+    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= radii.length) {
+      player.sendMessage("The selected claim radius was invalid.");
+      return;
+    }
+    system.run(() => confirmClaimAdd(player, radii[selectedIndex], onBack));
+  }).catch(() => player.sendMessage("The claim radius menu could not be opened."));
+}
+
 function showClaimInfo(player) {
   const chunk = getChunk(player.location);
   const claim = getClaim(player.dimension.id, chunk.x, chunk.z);
@@ -1186,8 +1214,7 @@ export function openClaimMenu(player, onBack) {
     .title("Claims")
     .body("Claims protect chunks from other players. Friend invitations apply to all chunks you own.")
     .button("Claim Current Chunk")
-    .button("Claim Radius 3")
-    .button("Claim Radius 5")
+    .button("Claim Radius")
     .button("Walk & Claim")
     .button("Invite Friend")
     .button("Remove Friend")
@@ -1202,14 +1229,13 @@ export function openClaimMenu(player, onBack) {
     }
     const returnToClaims = () => openClaimMenu(player, onBack);
     if (response.selection === 0) system.run(() => confirmClaimAdd(player, 0, returnToClaims));
-    if (response.selection === 1) system.run(() => confirmClaimAdd(player, 3, returnToClaims));
-    if (response.selection === 2) system.run(() => confirmClaimAdd(player, 5, returnToClaims));
-    if (response.selection === 3) system.run(() => startWalkMode(player));
-    if (response.selection === 4) system.run(() => openClaimInviteMenu(player, returnToClaims));
-    if (response.selection === 5) system.run(() => openClaimDeinviteMenu(player, returnToClaims));
-    if (response.selection === 6) system.run(() => openClaimToggleMenu(player, returnToClaims));
-    if (response.selection === 7) system.run(() => showClaimInfo(player));
-    if (response.selection === 8) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
+    if (response.selection === 1) system.run(() => openClaimRadiusMenu(player, returnToClaims));
+    if (response.selection === 2) system.run(() => startWalkMode(player));
+    if (response.selection === 3) system.run(() => openClaimInviteMenu(player, returnToClaims));
+    if (response.selection === 4) system.run(() => openClaimDeinviteMenu(player, returnToClaims));
+    if (response.selection === 5) system.run(() => openClaimToggleMenu(player, returnToClaims));
+    if (response.selection === 6) system.run(() => showClaimInfo(player));
+    if (response.selection === 7) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
   }).catch(() => player.sendMessage("The Claims menu could not be opened."));
 }
 

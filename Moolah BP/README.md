@@ -93,6 +93,8 @@ When joining the world, players receive a color-coded summary if they have incom
 
 When enabled by an economy admin, claims protect entire chunks from sky to bedrock. The default price is 10 Moolah per chunk, and every purchase is paid into the Tax Pool. Use **Claims** in the main menu or run `/claim`.
 
+The **Claim Radius** menu supports radii 1 through 9 and shows the resulting square dimensions and chunk count before continuing to purchase confirmation.
+
 - `/claim add` buys the current chunk after confirmation.
 - `/claim add <1-9>` buys a square radius centered on the current chunk. Radius 1 is 3×3; radius 9 is 19×19.
 - `/claim remove [1-9]` unclaims your chunks in the selected area after confirmation. Refunds are off by default and configurable by admins.
