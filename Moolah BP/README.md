@@ -96,8 +96,9 @@ When enabled by an economy admin, claims protect entire chunks from sky to bedro
 - `/claim add` buys the current chunk after confirmation.
 - `/claim add <1-9>` buys a square radius centered on the current chunk. Radius 1 is 3×3; radius 9 is 19×19.
 - `/claim remove [1-9]` unclaims your chunks in the selected area after confirmation. Refunds are off by default and configurable by admins.
-- `/claim invite <username>` and `/claim deinvite <username>` manage access. Invitations apply to every chunk owned by the inviting player.
-- `/claim toggle firetick` and `/claim toggle explosions` change those protections for the current chunk.
+- `/claim invite` opens an online-player dropdown with an **Offline Player** username fallback. Invitations apply to every chunk owned by the inviting player.
+- `/claim deinvite` opens a dropdown containing your currently invited friends.
+- `/claim toggle` opens the fire-tick and explosion controls for the current chunk.
 - `/claim info` shows the current chunk's owner, globally invited friends, and protection settings.
 - `/claim walk` records each unique unclaimed chunk you enter. Crouch three separate times quickly to finish, then confirm the combined cost. Walk & Claim is limited to 512 selected chunks per session.
 

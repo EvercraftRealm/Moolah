@@ -7,7 +7,7 @@ import {
   system,
   world,
 } from "@minecraft/server";
-import { ActionFormData, MessageFormData } from "@minecraft/server-ui";
+import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
 
 const MINECOIN_GLYPH = "\uE102";
@@ -712,6 +712,103 @@ function deinviteFriend(player, username) {
   }
 }
 
+function openOfflineClaimInvite(player, onBack) {
+  const form = new ModalFormData()
+    .title("Offline Player")
+    .textField("Username", "Enter the player's exact name", { defaultValue: "" })
+    .submitButton("Invite");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const username = response.formValues?.[0];
+    if (typeof username !== "string" || username.trim().length === 0) {
+      player.sendMessage("Enter a player name.");
+      return;
+    }
+    inviteFriend(player, username);
+  }).catch(() => player.sendMessage("The offline-player invite menu could not be opened."));
+}
+
+function openClaimInviteMenu(player, onBack) {
+  const { profile } = resolveOwnerProfile(player);
+  if (profile.claimCount <= 0) {
+    player.sendMessage("You need at least one claim before inviting friends.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const invitedKeys = new Set(profile.friends.map((friend) => friend.key));
+  const onlineNames = world.getPlayers()
+    .filter((candidate) => (
+      candidate.id !== player.id
+      && !invitedKeys.has(normalizeName(candidate.name))
+    ))
+    .map((candidate) => candidate.name);
+  const options = [...onlineNames, "Offline Player"];
+  const form = new ModalFormData()
+    .title("Invite to Claims")
+    .dropdown("Player", options, { defaultValueIndex: 0 })
+    .submitButton("Invite");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const selectedIndex = response.formValues?.[0];
+    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= options.length) {
+      player.sendMessage("The selected player was invalid.");
+      return;
+    }
+    if (selectedIndex === onlineNames.length) {
+      system.run(() => openOfflineClaimInvite(
+        player,
+        () => openClaimInviteMenu(player, onBack),
+      ));
+      return;
+    }
+    inviteFriend(player, onlineNames[selectedIndex]);
+  }).catch(() => player.sendMessage("The claim invite menu could not be opened."));
+}
+
+function openClaimDeinviteMenu(player, onBack) {
+  const { profile } = resolveOwnerProfile(player);
+  if (profile.friends.length === 0) {
+    player.sendMessage("You have not invited anyone to your claims.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const form = new ModalFormData()
+    .title("Remove Claim Access")
+    .dropdown(
+      "Invited Friend",
+      profile.friends.map((friend) => friend.name),
+      { defaultValueIndex: 0 },
+    )
+    .submitButton("Remove Access");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    const selectedIndex = response.formValues?.[0];
+    if (
+      !Number.isSafeInteger(selectedIndex)
+      || selectedIndex < 0
+      || selectedIndex >= profile.friends.length
+    ) {
+      player.sendMessage("The selected friend was invalid.");
+      return;
+    }
+    deinviteFriend(player, profile.friends[selectedIndex].name);
+  }).catch(() => player.sendMessage("The claim access menu could not be opened."));
+}
+
 function toggleProtection(player, option) {
   const center = getChunk(player.location);
   const dimensionId = player.dimension.id;
@@ -740,6 +837,36 @@ function toggleProtection(player, option) {
     console.error(`[Moolah Claims] Protection toggle failed: ${error?.stack ?? error}`);
     player.sendMessage("That protection setting could not be changed.");
   }
+}
+
+function openClaimToggleMenu(player, onBack) {
+  const center = getChunk(player.location);
+  const claim = getClaim(player.dimension.id, center.x, center.z);
+  if (!claim) {
+    player.sendMessage("This chunk is not claimed.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+  if (!isOwner(player, claim)) {
+    player.sendMessage("Only the claim owner can change this chunk's protection settings.");
+    if (onBack) system.run(onBack);
+    return;
+  }
+
+  const form = new ActionFormData()
+    .title("Claim Protection")
+    .body(`Chunk ${center.x}, ${center.z}\nChoose a protection to toggle.`)
+    .button(`Fire Tick: ${claim.fireTick ? "Enabled" : "Protected"}`)
+    .button(`Explosions: ${claim.explosions ? "Enabled" : "Protected"}`);
+
+  form.show(player).then((response) => {
+    if (response.canceled || response.selection === undefined) {
+      if (onBack) system.run(onBack);
+      return;
+    }
+    if (response.selection === 0) toggleProtection(player, "firetick");
+    if (response.selection === 1) toggleProtection(player, "explosions");
+  }).catch(() => player.sendMessage("The claim protection menu could not be opened."));
 }
 
 function showClaimInfo(player) {
@@ -1062,6 +1189,9 @@ export function openClaimMenu(player, onBack) {
     .button("Claim Radius 3")
     .button("Claim Radius 5")
     .button("Walk & Claim")
+    .button("Invite Friend")
+    .button("Remove Friend")
+    .button("Toggle Protections")
     .button("Claim Info")
     .button("Unclaim Current Chunk");
 
@@ -1075,8 +1205,11 @@ export function openClaimMenu(player, onBack) {
     if (response.selection === 1) system.run(() => confirmClaimAdd(player, 3, returnToClaims));
     if (response.selection === 2) system.run(() => confirmClaimAdd(player, 5, returnToClaims));
     if (response.selection === 3) system.run(() => startWalkMode(player));
-    if (response.selection === 4) system.run(() => showClaimInfo(player));
-    if (response.selection === 5) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
+    if (response.selection === 4) system.run(() => openClaimInviteMenu(player, returnToClaims));
+    if (response.selection === 5) system.run(() => openClaimDeinviteMenu(player, returnToClaims));
+    if (response.selection === 6) system.run(() => openClaimToggleMenu(player, returnToClaims));
+    if (response.selection === 7) system.run(() => showClaimInfo(player));
+    if (response.selection === 8) system.run(() => confirmClaimRemove(player, 0, returnToClaims));
   }).catch(() => player.sendMessage("The Claims menu could not be opened."));
 }
 
@@ -1100,7 +1233,7 @@ export function registerClaimCommand(commandRegistry) {
       cheatsRequired: false,
       optionalParameters: [
         { type: CustomCommandParamType.Enum, name: "moolah:claim_action" },
-        { type: CustomCommandParamType.String, name: "value" },
+        { type: CustomCommandParamType.Integer, name: "radius" },
       ],
     },
     (origin, actionValue, value) => {
@@ -1135,15 +1268,24 @@ export function registerClaimCommand(commandRegistry) {
         return { status: CustomCommandStatus.Success };
       }
       if (action === "invite") {
-        system.run(() => inviteFriend(player, value));
+        if (value !== undefined) {
+          return { status: CustomCommandStatus.Failure, message: "Usage: /claim invite" };
+        }
+        system.run(() => openClaimInviteMenu(player));
         return { status: CustomCommandStatus.Success };
       }
       if (action === "deinvite") {
-        system.run(() => deinviteFriend(player, value));
+        if (value !== undefined) {
+          return { status: CustomCommandStatus.Failure, message: "Usage: /claim deinvite" };
+        }
+        system.run(() => openClaimDeinviteMenu(player));
         return { status: CustomCommandStatus.Success };
       }
       if (action === "toggle") {
-        system.run(() => toggleProtection(player, value));
+        if (value !== undefined) {
+          return { status: CustomCommandStatus.Failure, message: "Usage: /claim toggle" };
+        }
+        system.run(() => openClaimToggleMenu(player));
         return { status: CustomCommandStatus.Success };
       }
       if (action === "info" && value === undefined) {
@@ -1157,7 +1299,7 @@ export function registerClaimCommand(commandRegistry) {
 
       return {
         status: CustomCommandStatus.Failure,
-        message: "Usage: /claim <add|remove|invite|deinvite|toggle|info|walk> [value]",
+        message: "Usage: /claim <add|remove> [radius] or /claim <invite|deinvite|toggle|info|walk>",
       };
     },
   );
