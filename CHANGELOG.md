@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 - 2026-10-15
+
+- Creeper explosions in protected claims now damage players and unnamed hostile
+  mobs while continuing to protect blocks, animals, pets, named mobs, and
+  decorative entities.
+- Unnamed hostile mobs can now take fire and fire-tick damage inside protected
+  claims.
+
 ## 1.2.0 - 2026-10-13
 
 - Added global guest access with optional 1–3650 day expiration.

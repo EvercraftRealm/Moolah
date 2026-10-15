@@ -2011,6 +2011,27 @@ function isExplosionDamage(cause) {
   return EXPLOSION_DAMAGE_CAUSES.has(String(cause ?? "").toLowerCase());
 }
 
+function isUnnamedHostile(entity) {
+  if (!entity || entity.typeId === "minecraft:player") return false;
+  try {
+    if (String(entity.nameTag ?? "").trim()) return false;
+    const typeFamily = entity.getComponent("minecraft:type_family");
+    return typeFamily?.hasTypeFamily("monster") === true
+      || typeFamily?.hasTypeFamily("hostile") === true;
+  } catch {
+    return false;
+  }
+}
+
+function shouldAllowProtectedFireDamage(entity) {
+  return isUnnamedHostile(entity);
+}
+
+function shouldAllowProtectedExplosionDamage(entity, damageSource) {
+  if (damageSource?.damagingEntity?.typeId !== "minecraft:creeper") return false;
+  return entity.typeId === "minecraft:player" || isUnnamedHostile(entity);
+}
+
 function enqueueFireScanTasks() {
   if (!getEconomySettings().allowClaims) {
     fireQueue.length = 0;
@@ -2280,7 +2301,19 @@ export function initializeClaimSystem() {
     const claim = getClaimAt(event.hurtEntity.dimension, event.hurtEntity.location);
     if (!claim) return;
     const cause = event.damageSource?.cause;
-    if ((!claim.fireTick && isFireDamage(cause)) || (!claim.explosions && isExplosionDamage(cause))) {
+    if (
+      !claim.fireTick
+      && isFireDamage(cause)
+      && !shouldAllowProtectedFireDamage(event.hurtEntity)
+    ) {
+      event.cancel = true;
+      return;
+    }
+    if (
+      !claim.explosions
+      && isExplosionDamage(cause)
+      && !shouldAllowProtectedExplosionDamage(event.hurtEntity, event.damageSource)
+    ) {
       event.cancel = true;
       return;
     }
