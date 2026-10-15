@@ -33,10 +33,6 @@ const WIND_CHARGE_PROJECTILES = new Set([
   "minecraft:wind_charge_projectile",
   "minecraft:breeze_wind_charge_projectile",
 ]);
-const WIND_CHARGE_PROTECTED_DECOR = new Set([
-  "minecraft:painting",
-  "minecraft:cushion",
-]);
 const GUEST_SAFE_ENTITY_TYPES = new Set([
   "minecraft:npc",
   "minecraft:villager",
@@ -87,7 +83,6 @@ const fireQueue = [];
 const queuedFireTasks = new Set();
 const ownerKeyCache = new Map();
 const simulatedCreeperDamageEntities = new Set();
-const windChargeFallProtection = new Map();
 let ownClaimBorderColor;
 let otherClaimBorderColor;
 let unclaimedBorderColor;
@@ -1861,11 +1856,6 @@ function updateClaimEntryMessages() {
       ownerKeyCache.delete(playerId);
     }
   }
-  for (const [playerId, protectionUntil] of windChargeFallProtection) {
-    if (!onlineIds.has(playerId) || protectionUntil < system.currentTick) {
-      windChargeFallProtection.delete(playerId);
-    }
-  }
 }
 
 export function isClaimActionbarActive(player) {
@@ -2018,6 +2008,15 @@ function getDamagePlayer(damageSource) {
   return undefined;
 }
 
+function getProjectilePlayer(projectile) {
+  try {
+    const owner = projectile?.getComponent("minecraft:projectile")?.owner;
+    return owner?.typeId === "minecraft:player" ? owner : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function isFireDamage(cause) {
   return FIRE_DAMAGE_CAUSES.has(String(cause ?? "").toLowerCase());
 }
@@ -2156,84 +2155,6 @@ function simulateProtectedCreeperExplosion(dimension, origin, charged, source, s
     source?.remove();
   } catch {
     // The creeper is normally already removed as its explosion completes.
-  }
-}
-
-function simulateWindChargeExplosion(dimension, origin, breezeCharge, source, sourceId) {
-  const power = breezeCharge ? 3 : 1.2;
-  const knockbackScaling = breezeCharge ? 0.6 : 1.22;
-  const maxDistance = power * 2;
-  try {
-    dimension.playSound(
-      breezeCharge ? "breeze_wind_charge.burst" : "wind_charge.burst",
-      origin,
-    );
-    dimension.spawnParticle(
-      breezeCharge ? "minecraft:breeze_wind_burst" : "minecraft:wind_burst",
-      origin,
-    );
-  } catch (error) {
-    console.warn(`[Moolah Claims] Could not play a simulated wind charge effect: ${error}`);
-  }
-
-  let entities = [];
-  try {
-    entities = dimension.getEntities({ location: origin, maxDistance });
-  } catch (error) {
-    console.warn(`[Moolah Claims] Could not query wind charge targets: ${error}`);
-  }
-
-  const claimsEnabled = getEconomySettings().allowClaims;
-  for (const entity of entities) {
-    try {
-      if (entity.id === sourceId) continue;
-      if (WIND_CHARGE_PROTECTED_DECOR.has(entity.typeId)) continue;
-      if (
-        entity.typeId !== "minecraft:player"
-        && !entity.hasComponent("minecraft:health")
-      ) {
-        continue;
-      }
-
-      const targetClaim = claimsEnabled ? getClaimAt(dimension, entity.location) : undefined;
-      if (
-        targetClaim
-        && !targetClaim.explosions
-        && entity.typeId !== "minecraft:player"
-        && !isUnnamedHostile(entity)
-      ) {
-        continue;
-      }
-
-      const target = entity.getHeadLocation();
-      const offset = {
-        x: target.x - origin.x,
-        y: target.y - origin.y,
-        z: target.z - origin.z,
-      };
-      const distance = Math.hypot(offset.x, offset.y, offset.z);
-      if (distance <= 0.1 || distance > maxDistance) continue;
-      const exposure = explosionExposure(dimension, origin, entity);
-      const impact = (1 - distance / maxDistance) * exposure;
-      if (impact <= 0) continue;
-      const impulse = impact * knockbackScaling;
-      entity.applyImpulse({
-        x: (offset.x / distance) * impulse,
-        y: Math.max(0.1, (offset.y / distance) * impulse),
-        z: (offset.z / distance) * impulse,
-      });
-      if (!breezeCharge && entity.typeId === "minecraft:player") {
-        windChargeFallProtection.set(entity.id, system.currentTick + 200);
-      }
-    } catch {
-      // Invalid or non-living entities do not participate in the simulated burst.
-    }
-  }
-
-  try {
-    source?.remove();
-  } catch {
-    // The projectile may already have been removed when its impact completed.
   }
 }
 
@@ -2502,21 +2423,11 @@ export function initializeClaimSystem() {
     cancelIfNoInteractAccess(event, event.entity, event.item.dimension, event.item.location);
   });
   world.beforeEvents.entityHurt.subscribe((event) => {
-    const cause = event.damageSource?.cause;
-    if (cause === "fall") {
-      const protectionUntil = windChargeFallProtection.get(event.hurtEntity.id);
-      if (protectionUntil !== undefined) {
-        windChargeFallProtection.delete(event.hurtEntity.id);
-        if (protectionUntil >= system.currentTick) {
-          event.cancel = true;
-          return;
-        }
-      }
-    }
     if (!getEconomySettings().allowClaims) return;
     const claim = getClaimAt(event.hurtEntity.dimension, event.hurtEntity.location);
     if (!claim) return;
     if (simulatedCreeperDamageEntities.has(event.hurtEntity.id)) return;
+    const cause = event.damageSource?.cause;
     if (
       !claim.fireTick
       && isFireDamage(cause)
@@ -2540,26 +2451,31 @@ export function initializeClaimSystem() {
     }
   });
   world.beforeEvents.explosion.subscribe((event) => {
+    if (!getEconomySettings().allowClaims) return;
     const source = event.source;
     if (source && WIND_CHARGE_PROJECTILES.has(source.typeId)) {
-      let origin;
+      let sourceClaim;
       try {
-        origin = { ...source.location };
+        sourceClaim = getClaimAt(event.dimension, source.location);
       } catch {
-        origin = undefined;
+        sourceClaim = undefined;
       }
-      if (origin) {
-        const breezeCharge = source.typeId === "minecraft:breeze_wind_charge_projectile";
-        const sourceId = source.id;
-        const dimension = event.dimension;
-        event.cancel = true;
-        system.run(() => {
-          simulateWindChargeExplosion(dimension, origin, breezeCharge, source, sourceId);
-        });
-        return;
+      if (sourceClaim && !sourceClaim.explosions) {
+        const player = getProjectilePlayer(source);
+        if (!player || !hasEditAccess(player, sourceClaim)) {
+          event.cancel = true;
+          if (player) denyPlayer(player, sourceClaim.ownerName);
+          system.run(() => {
+            try {
+              source.remove();
+            } catch {
+              // The projectile may already be gone after its impact.
+            }
+          });
+          return;
+        }
       }
     }
-    if (!getEconomySettings().allowClaims) return;
     if (source?.typeId === "minecraft:creeper") {
       let origin;
       try {
