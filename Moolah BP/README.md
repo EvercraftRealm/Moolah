@@ -193,7 +193,7 @@ The Admin menu is organized into seven categories:
   - **Allow Deposit** — on by default
   - **Allow Withdraw** — on by default
   - **Allow Transfer** — on by default; also controls QuickPay
-  - **Allow Mail** — on by default; also controls `/mail`
+  - **Allow Mail** — off by default; also controls `/mail`
 - **Tax Policy**
   - Current Tax Pool display
   - **Death Tax** — 0 moolah by default
@@ -204,7 +204,7 @@ The Admin menu is organized into seven categories:
   - **Distribute Taxes** — off by default
   - **Max Tax Refund** — 100 moolah by default
 - **Market**
-  - **Allow Market** — on by default; also controls `/market`, `/buy`, and `/sell`
+  - **Allow Market** — off by default; also controls `/market`, `/buy`, and `/sell`
   - **Max Market Listings** — 3 per player by default
   - **Listing Fee** — 10 moolah by default
   - **Refund Cancelled Listing Fees** — off by default
