@@ -13,6 +13,8 @@
 - Unclaimed chunk borders now use a brighter neutral white particle color.
 - New installations now start with Mail and Market disabled, leaving Deposit,
   Withdraw, Transfer, and QuickPay as the default enabled features.
+- Remade the Claims menu icon with a rectangular Minecraft-style wooden shield
+  and a more vanilla-like grass block texture.
 
 ## 1.2.0 - 2026-10-13
 
