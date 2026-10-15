@@ -1578,7 +1578,7 @@ function toggleClaimView(player) {
     return;
   }
   claimViewPlayers.add(player.id);
-  player.sendMessage("Claim border view enabled. Green borders are yours, red borders belong to other players, and grey borders are unclaimed. Run /claim view again to exit.");
+  player.sendMessage("Claim border view enabled. Green borders are yours, red borders belong to other players, and white borders are unclaimed. Run /claim view again to exit.");
 }
 
 function initializeClaimViewColors() {
@@ -1589,7 +1589,7 @@ function initializeClaimViewColors() {
     unclaimedBorderColor = new MolangVariableMap();
     ownClaimBorderColor.setColorRGB("variable.color", { red: 0.15, green: 1, blue: 0.15 });
     otherClaimBorderColor.setColorRGB("variable.color", { red: 1, green: 0.1, blue: 0.1 });
-    unclaimedBorderColor.setColorRGB("variable.color", { red: 0.55, green: 0.55, blue: 0.55 });
+    unclaimedBorderColor.setColorRGB("variable.color", { red: 0.9, green: 0.9, blue: 0.9 });
     return true;
   } catch (error) {
     ownClaimBorderColor = undefined;

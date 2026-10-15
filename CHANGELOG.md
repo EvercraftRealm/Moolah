@@ -10,6 +10,7 @@
 - Wind charges retain their normal behavior outside protected claims and for
   claim owners and friends, while unauthorized bursts are blocked inside other
   players' claims.
+- Unclaimed chunk borders now use a brighter neutral white particle color.
 
 ## 1.2.0 - 2026-10-13
 
