@@ -7,6 +7,9 @@
   decorative entities.
 - Unnamed hostile mobs can now take fire and fire-tick damage inside protected
   claims.
+- Wind charge bursts no longer destroy paintings, cushions, or similar
+  decorations without dealing real damage. Their knockback remains active for
+  living entities, while protected claim animals and villagers are not displaced.
 
 ## 1.2.0 - 2026-10-13
 
