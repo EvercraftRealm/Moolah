@@ -2238,7 +2238,7 @@ function openClaimLandMenu(player, onBack) {
 function openClaimFriendsMenu(player, onBack) {
   const form = new ActionFormData()
     .title("Manage Friends")
-    .body("Friend and guest access applies to all chunks you own. Friends can build. Guests can interact and pick up items, but cannot edit or cause harm.")
+    .body("Invites apply to all chunks you own. Friends get full access. Guests can only interact, pick up items, etc. but cannot edit or cause harm.")
     .button("Add Friend")
     .button("Remove Friend")
     .button("Add Guest")
