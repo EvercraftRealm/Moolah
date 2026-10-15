@@ -25,11 +25,13 @@ before installing or updating add-ons.
 
 - Diamond-backed balances and reversible deposits
 - Escrowed online and offline player payments
-- QuickPay signs and player mail
-- GUI market that preserves native item data
+- QuickPay signs for convenient transfers
+- Detailed log system (Up to 512 recent entries) accessible by admins
 - Configurable taxes and tax-return distribution
-- Optional distance-priced warps
-- Optional Moolah-priced chunk claims and protection
+- Optional mail system with offline-player support
+- Optional market system that preserves all native item data
+- Optional warp system with distance & dimensional pricing
+- Optional claim system with paid chunk-claims and user-configured protections
 - Achievement-friendly first-player administration
 
 For complete player and administrator documentation, see
