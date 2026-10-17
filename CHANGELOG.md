@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2 - 2026-10-17
+
+- Warmed the unclaimed claim-border tint to counter the particle's blue bias
+  and render closer to neutral white in-game.
+
 ## 1.2.1 - 2026-10-15
 
 - Creeper explosions in protected claims now damage players and unnamed hostile

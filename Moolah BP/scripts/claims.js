@@ -1589,7 +1589,7 @@ function initializeClaimViewColors() {
     unclaimedBorderColor = new MolangVariableMap();
     ownClaimBorderColor.setColorRGB("variable.color", { red: 0.15, green: 1, blue: 0.15 });
     otherClaimBorderColor.setColorRGB("variable.color", { red: 1, green: 0.1, blue: 0.1 });
-    unclaimedBorderColor.setColorRGB("variable.color", { red: 0.9, green: 0.9, blue: 0.9 });
+    unclaimedBorderColor.setColorRGB("variable.color", { red: 1, green: 0.82, blue: 0.62 });
     return true;
   } catch (error) {
     ownClaimBorderColor = undefined;
