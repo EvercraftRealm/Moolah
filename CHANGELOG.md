@@ -4,6 +4,8 @@
 
 - Warmed the unclaimed claim-border tint to counter the particle's blue bias
   and render closer to neutral white in-game.
+- Moved Inbox and Pending notices to the top of the main menu when visible and
+  added dedicated icons for both actions.
 
 ## 1.2.1 - 2026-10-15
 

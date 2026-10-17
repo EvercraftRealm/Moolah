@@ -394,6 +394,16 @@ function openShop(player) {
     .title("Moolah Menu")
     .body(`Balance: \uE102${balance}\n\nChoose an option:`);
 
+  if (inboxCount > 0) {
+    shopForm.button(`(${inboxCount}) Inbox`, `${BANK_ICON_ROOT}/inbox`);
+    menuActions.push("inbox");
+  }
+
+  if (pendingCount > 0) {
+    shopForm.button(`(${pendingCount}) Pending`, `${BANK_ICON_ROOT}/pending`);
+    menuActions.push("pending");
+  }
+
   if (settings.allowDeposit) {
     shopForm.button("Deposit", `${BANK_ICON_ROOT}/deposit`);
     menuActions.push("deposit");
@@ -417,16 +427,6 @@ function openShop(player) {
   if (settings.allowMarket) {
     shopForm.button("Market", `${BANK_ICON_ROOT}/market`);
     menuActions.push("market");
-  }
-
-  if (inboxCount > 0) {
-    shopForm.button(`(${inboxCount}) Inbox`);
-    menuActions.push("inbox");
-  }
-
-  if (pendingCount > 0) {
-    shopForm.button(`(${pendingCount}) Pending`);
-    menuActions.push("pending");
   }
 
   if (settings.allowWarp) {
