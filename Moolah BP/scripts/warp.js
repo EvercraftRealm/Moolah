@@ -2,25 +2,13 @@ import { system, world } from "@minecraft/server";
 import { MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { addToTaxPool, getEconomySettings } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
+import { addBalance, getBalance } from "./balance.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const NETHER_COORDINATE_SCALE = 8;
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
-}
-
-function getCurrencyObjective() {
-  return world.scoreboard.getObjective("moolah")
-    ?? world.scoreboard.addObjective("moolah", "Moolah");
-}
-
-function getBalance(player) {
-  try {
-    return getCurrencyObjective().getScore(player) ?? 0;
-  } catch {
-    return 0;
-  }
 }
 
 function getWorldSpawnDestination() {
@@ -138,7 +126,6 @@ function performWarp(player, destination, expectedCost) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const balance = getBalance(player);
 
   if (balance < expectedCost) {
@@ -148,12 +135,12 @@ function performWarp(player, destination, expectedCost) {
     return;
   }
 
-  if (expectedCost > 0) objective.addScore(player, -expectedCost);
+  if (expectedCost > 0) addBalance(player, -expectedCost);
 
   try {
     player.teleport(destination.location, { dimension: destination.dimension });
   } catch (error) {
-    if (expectedCost > 0) objective.addScore(player, expectedCost);
+    if (expectedCost > 0) addBalance(player, expectedCost);
     console.error(`[Moolah] Warp failed: ${error?.stack ?? error}`);
     player.sendMessage("The warp could not be completed. No funds were moved.");
     return;

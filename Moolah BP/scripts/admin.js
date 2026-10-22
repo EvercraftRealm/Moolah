@@ -139,6 +139,9 @@ function openTaxPolicyAdminMenu(player, onBack) {
       valueStep: 1,
     })
     .toggle("Distribute Taxes", { defaultValue: settings.distributeTaxes })
+    .toggle("Send External Charges to Tax Pool", {
+      defaultValue: settings.sendExternalChargesToTaxPool,
+    })
     .textField("Max Tax Refund", "0 or more", {
       defaultValue: String(settings.maxTaxRefund),
     })
@@ -159,6 +162,7 @@ function openTaxPolicyAdminMenu(player, onBack) {
       withdrawTaxRate,
       marketTaxRate,
       distributeTaxes,
+      sendExternalChargesToTaxPool,
       maxTaxRefundValue,
     ] = response.formValues;
     const rates = [transferTaxRate, withdrawTaxRate, marketTaxRate];
@@ -178,6 +182,7 @@ function openTaxPolicyAdminMenu(player, onBack) {
     if (
       !rates.every((value) => Number.isFinite(value) && value >= 0 && value <= 100)
       || typeof distributeTaxes !== "boolean"
+      || typeof sendExternalChargesToTaxPool !== "boolean"
       || !/^\d+$/.test(deathTaxText)
       || !Number.isSafeInteger(deathTax)
       || !/^\d+$/.test(deathTaxCooldownText)
@@ -196,6 +201,7 @@ function openTaxPolicyAdminMenu(player, onBack) {
       deathTax,
       deathTaxCooldownMinutes,
       distributeTaxes,
+      sendExternalChargesToTaxPool,
       maxTaxRefund,
     });
     player.sendMessage("Tax Policy saved.");

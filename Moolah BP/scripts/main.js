@@ -48,6 +48,11 @@ import {
   setTaxPool,
 } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
+import {
+  addBalance,
+  getBalance,
+  initializeBalanceMonitor,
+} from "./balance.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const FIRST_ADMIN_PROPERTY = "moolah:first_admin_assigned";
@@ -62,6 +67,7 @@ const playersShowingBalance = new Set();
 const taxRefundSessions = new Map();
 
 initializeClaimSystem();
+initializeBalanceMonitor();
 
 function sendLoginNotifications(player) {
   const payments = getEscrowPayments();
@@ -136,14 +142,13 @@ function applyDeathTax(player) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const balance = getBalance(player);
   const charged = Math.min(settings.deathTax, balance);
   const previousPool = getTaxPool();
 
   try {
     if (charged > 0) {
-      objective.addScore(player, -charged);
+      addBalance(player, -charged);
       setTaxPool(previousPool + charged);
     }
 
@@ -161,7 +166,7 @@ function applyDeathTax(player) {
     if (charged > 0) {
       try {
         setTaxPool(previousPool);
-        objective.addScore(player, charged);
+        addBalance(player, charged);
       } catch (rollbackError) {
         console.error(
           `[Moolah] Death Tax rollback failed: ${rollbackError?.stack ?? rollbackError}`,
@@ -169,19 +174,6 @@ function applyDeathTax(player) {
       }
     }
     console.error(`[Moolah] Death Tax failed: ${error?.stack ?? error}`);
-  }
-}
-
-function getCurrencyObjective() {
-  return world.scoreboard.getObjective("moolah")
-    ?? world.scoreboard.addObjective("moolah", "Moolah");
-}
-
-function getBalance(player) {
-  try {
-    return getCurrencyObjective().getScore(player) ?? 0;
-  } catch {
-    return 0;
   }
 }
 

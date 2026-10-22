@@ -12,6 +12,7 @@ import {
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
+import { addBalance, getBalance, setBalance } from "./balance.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const OWNER_KEY_PROPERTY = "moolah:claim_owner_key";
@@ -400,19 +401,6 @@ function hasInteractAccess(player, claim) {
   return hasEditAccess(player, claim) || hasGuestAccess(player, claim);
 }
 
-function getCurrencyObjective() {
-  return world.scoreboard.getObjective("moolah")
-    ?? world.scoreboard.addObjective("moolah", "Moolah");
-}
-
-function getBalance(player) {
-  try {
-    return getCurrencyObjective().getScore(player) ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
 function enumerateRadius(center, radius) {
   const chunks = [];
   for (let x = center.x - radius; x <= center.x + radius; x++) {
@@ -559,11 +547,10 @@ function purchaseChunks(player, dimensionId, requestedChunks) {
       explosions: false,
     };
     const changes = available.map((chunk) => ({ ...chunk, claim: claimRecord }));
-    const objective = getCurrencyObjective();
     let rollbackClaims;
 
     try {
-      if (totalCost > 0) objective.addScore(player, -totalCost);
+      if (totalCost > 0) addBalance(player, -totalCost);
       setTaxPool(nextPool);
       rollbackClaims = commitClaimChanges(dimensionId, changes);
       saveProfile(nextProfile);
@@ -573,7 +560,7 @@ function purchaseChunks(player, dimensionId, requestedChunks) {
         rollbackClaims?.();
         restoreProfile(ownerKey, previousProfileRaw);
         setTaxPool(previousPool);
-        objective.setScore(player, balance);
+        setBalance(player, balance);
       } catch (rollbackError) {
         console.error(`[Moolah Claims] Purchase rollback failed: ${rollbackError}`);
       }
@@ -677,7 +664,6 @@ function removeChunks(player, dimensionId, requestedChunks, targetOwnerKey, isAd
       friends: [...previousProfile.friends],
     };
     const changes = removable.map((entry) => ({ x: entry.x, z: entry.z, claim: undefined }));
-    const objective = getCurrencyObjective();
     const previousBalance = getBalance(player);
     let rollbackClaims;
 
@@ -686,14 +672,14 @@ function removeChunks(player, dimensionId, requestedChunks, targetOwnerKey, isAd
       saveProfile(nextProfile);
       if (refund > 0) {
         setTaxPool(previousPool - refund);
-        objective.addScore(player, refund);
+        addBalance(player, refund);
       }
     } catch (error) {
       try {
         rollbackClaims?.();
         restoreProfile(targetOwnerKey, previousProfileRaw);
         setTaxPool(previousPool);
-        if (!isAdminRemoval) objective.setScore(player, previousBalance);
+        if (!isAdminRemoval) setBalance(player, previousBalance);
       } catch (rollbackError) {
         console.error(`[Moolah Claims] Removal rollback failed: ${rollbackError}`);
       }
@@ -2037,8 +2023,19 @@ function isUnnamedHostile(entity) {
   }
 }
 
+function isUnnamedUndead(entity) {
+  if (!entity || entity.typeId === "minecraft:player") return false;
+  try {
+    if (String(entity.nameTag ?? "").trim()) return false;
+    return entity.getComponent("minecraft:type_family")
+      ?.hasTypeFamily("undead") === true;
+  } catch {
+    return false;
+  }
+}
+
 function shouldAllowProtectedFireDamage(entity) {
-  return isUnnamedHostile(entity);
+  return isUnnamedHostile(entity) || isUnnamedUndead(entity);
 }
 
 function shouldAllowProtectedExplosionDamage(entity, damageSource) {

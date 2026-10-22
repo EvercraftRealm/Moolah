@@ -31,6 +31,7 @@ export const DEFAULT_ECONOMY_SETTINGS = Object.freeze({
   claimCostPerChunk: 10,
   refundRemovedClaims: false,
   distributeTaxes: false,
+  sendExternalChargesToTaxPool: false,
 });
 
 export function getEconomySettings() {
@@ -60,6 +61,7 @@ export function getEconomySettings() {
       "refundCanceledPostage",
       "refundRemovedClaims",
       "distributeTaxes",
+      "sendExternalChargesToTaxPool",
     ]) {
       if (typeof stored[key] === "boolean") settings[key] = stored[key];
     }

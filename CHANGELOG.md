@@ -6,6 +6,11 @@
   and render closer to neutral white in-game.
 - Moved Inbox and Pending notices to the top of the main menu when visible and
   added dedicated icons for both actions.
+- Added an off-by-default **Send External Charges to Tax Pool** policy that
+  detects outside scoreboard deductions, transfers them to the Tax Pool, and
+  records each successful collection in the Admin & Tax log.
+- Allowed unnamed undead mobs such as zombie horses to take normal fire damage
+  inside fire-protected claims, even when they are not classified as hostile.
 
 ## 1.2.1 - 2026-10-15
 

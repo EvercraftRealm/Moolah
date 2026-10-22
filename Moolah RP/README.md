@@ -107,7 +107,7 @@ The **Claim Radius** menu supports radii 1 through 9 and shows the resulting squ
 - `/claim view` toggles claim-border particles across loaded simulation-distance chunks. Green borders are yours, red borders belong to other players, and grey borders are unclaimed; run the command again to exit.
 - `/claim walk` records each unique unclaimed chunk you enter. Crouch three separate times quickly to finish, then confirm the combined cost. Walk & Claim is limited to 512 selected chunks per session.
 
-Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Guests may use approved doors, controls, containers, workstations, and villager trading, and may pick up dropped items, but cannot edit land or damage entities. Explosions do not destroy protected blocks. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.
+Unauthorized players cannot break or place blocks, use doors or containers, interact with entities, pick up items, or damage mobs and players inside a claim. Guests may use approved doors, controls, containers, workstations, and villager trading, and may pick up dropped items, but cannot edit land or damage entities. Explosions do not destroy protected blocks. Unnamed hostile and undead mobs, including zombie horses, can burn normally. Fire spread protection uses bounded background cleanup near online players; keep backups because Bedrock does not expose a cancellable fire-spread event.
 
 Entering or leaving a claimed area shows its owner in the actionbar. Moving between adjacent chunks owned by the same player does not repeat the message. Economy admins can remove another player's claims by standing in one and using the normal remove command; administrative removals never issue refunds.
 
@@ -200,6 +200,7 @@ The Admin menu is organized into six categories:
   - **Charge Tax on Withdraws** — 10% by default
   - **Charge Tax on Market** — 10% by default
   - **Distribute Taxes** — off by default
+  - **Send External Charges to Tax Pool** — off by default; detects Moolah removed through the scoreboard by other add-ons or commands
   - **Max Tax Refund** — 100 moolah by default
 - **Market**
   - **Allow Market** — on by default; also controls `/market`, `/buy`, and `/sell`
@@ -222,6 +223,8 @@ The Admin menu is organized into six categories:
   - **Max Warp Cost** — blank and uncapped by default
 
 Taxes are charged in addition to the base value and added to the shared **Tax Pool**. Transfer taxes remain refundable while the payment is Pending and only enter the pool after the recipient accepts. When configured, the flat Death Tax is collected no more than once per player during its cooldown period; the player receives the result as Inbox Mail from **System**.
+
+When **Send External Charges to Tax Pool** is enabled, decreases made directly to a player's `moolah` scoreboard balance outside Moolah are added to the Tax Pool and recorded under **Admin & Tax** logs. Moolah's own charges and refunds are tracked separately and are not counted twice. The setting is off by default.
 
 When **Distribute Taxes** is enabled, each player earns a Tax Return after every eligible hour online. Each return is 1% of the current Tax Pool, capped by the configured **Max Tax Refund**, and is reserved from the pool until claimed from the player's **Inbox**. Distribution pauses while the pool is below 100 moolah. Only active online play counts toward eligibility; logged-out or AFK time does not. Holding a diamond shows the player's balance and current Tax Return countdown in the actionbar.
 

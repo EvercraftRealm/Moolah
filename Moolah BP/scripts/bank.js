@@ -10,6 +10,7 @@ import {
   getEconomySettings,
 } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
+import { addBalance, getBalance } from "./balance.js";
 
 const DEPOSIT_QUANTITIES = [1, 4, 16, 64];
 const ESCROW_PROPERTY_PREFIX = "moolah:escrow:";
@@ -20,19 +21,6 @@ const quickPayCooldowns = new Map();
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
-}
-
-function getCurrencyObjective() {
-  return world.scoreboard.getObjective("moolah")
-    ?? world.scoreboard.addObjective("moolah", "Moolah");
-}
-
-function getBalance(player) {
-  try {
-    return getCurrencyObjective().getScore(player) ?? 0;
-  } catch {
-    return 0;
-  }
 }
 
 function getInventory(player) {
@@ -120,10 +108,8 @@ export function depositDiamonds(player, quantity) {
     return;
   }
 
-  const objective = getCurrencyObjective();
-
   removeDiamonds(inventory, quantity);
-  objective.addScore(player, quantity * 100);
+  addBalance(player, quantity * 100);
 
   player.sendMessage(
     `Deposited ${quantity} diamond${quantity === 1 ? "" : "s"} for \uE102${quantity * 100}.`,
@@ -258,14 +244,13 @@ function withdrawDiamonds(player, quantity) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const inventorySnapshot = [];
 
   for (let slot = 0; slot < inventory.size; slot++) {
     inventorySnapshot.push(inventory.getItem(slot)?.clone());
   }
 
-  objective.addScore(player, -totalCost);
+  addBalance(player, -totalCost);
 
   try {
     let remaining = quantity;
@@ -280,7 +265,7 @@ function withdrawDiamonds(player, quantity) {
       remaining -= stackSize;
     }
   } catch (error) {
-    objective.addScore(player, totalCost);
+    addBalance(player, totalCost);
     try {
       for (let slot = 0; slot < inventorySnapshot.length; slot++) {
         inventory.setItem(slot, inventorySnapshot[slot]);
@@ -549,7 +534,6 @@ function createEscrowPayment(sender, recipientName, amount, message = "") {
     return false;
   }
 
-  const objective = getCurrencyObjective();
   const senderBalance = getBalance(sender);
 
   if (senderBalance < totalCost) {
@@ -573,12 +557,12 @@ function createEscrowPayment(sender, recipientName, amount, message = "") {
     acceptAfter: Date.now() + INBOX_ACCEPT_DELAY_MS,
   };
 
-  objective.addScore(sender, -totalCost);
+  addBalance(sender, -totalCost);
 
   try {
     saveEscrowPayment(payment);
   } catch {
-    objective.addScore(sender, totalCost);
+    addBalance(sender, totalCost);
     sender.sendMessage("The pending payment could not be saved. No funds were moved.");
     return false;
   }
@@ -607,7 +591,6 @@ function createEscrowMail(sender, recipientName, message) {
   }
 
   const postageCost = settings.postageCost;
-  const objective = getCurrencyObjective();
   const senderBalance = getBalance(sender);
 
   if (senderBalance < postageCost) {
@@ -632,12 +615,12 @@ function createEscrowMail(sender, recipientName, message) {
     acceptAfter: Date.now(),
   };
 
-  if (postageCost > 0) objective.addScore(sender, -postageCost);
+  if (postageCost > 0) addBalance(sender, -postageCost);
 
   try {
     saveEscrowPayment(mail);
   } catch {
-    if (postageCost > 0) objective.addScore(sender, postageCost);
+    if (postageCost > 0) addBalance(sender, postageCost);
     sender.sendMessage("The mail could not be saved. No postage was charged.");
     return false;
   }
@@ -683,7 +666,7 @@ function acceptEscrowPayment(recipient, propertyId) {
 
   if (payment.kind === "transfer") {
     try {
-      getCurrencyObjective().addScore(recipient, payment.amount);
+      addBalance(recipient, payment.amount);
     } catch {
       saveEscrowPayment(payment);
       recipient.sendMessage("The payment could not be accepted.");
@@ -807,7 +790,6 @@ function cancelEscrowPayment(sender, propertyId) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const settings = getEconomySettings();
   const refundPostage = payment.kind === "mail" && settings.refundCanceledPostage;
   const refundAmount = payment.kind === "mail"
@@ -820,7 +802,7 @@ function cancelEscrowPayment(sender, propertyId) {
   world.setDynamicProperty(payment.propertyId, undefined);
 
   try {
-    if (refundAmount > 0) objective.addScore(sender, refundAmount);
+    if (refundAmount > 0) addBalance(sender, refundAmount);
   } catch {
     saveEscrowPayment(payment);
     sender.sendMessage("The pending item could not be canceled.");

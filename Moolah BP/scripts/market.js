@@ -10,6 +10,7 @@ import {
   getEconomySettings,
 } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
+import { addBalance, getBalance } from "./balance.js";
 
 const LISTING_PROPERTY_PREFIX = "moolah:market:";
 const STORAGE_ENTITY_TYPE = "moolah:market_storage";
@@ -17,19 +18,6 @@ const MAX_DESCRIPTION_LENGTH = 240;
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
-}
-
-function getCurrencyObjective() {
-  return world.scoreboard.getObjective("moolah")
-    ?? world.scoreboard.addObjective("moolah", "Moolah");
-}
-
-function getBalance(player) {
-  try {
-    return getCurrencyObjective().getScore(player) ?? 0;
-  } catch {
-    return 0;
-  }
 }
 
 function formatAmount(value) {
@@ -201,7 +189,6 @@ function createListing(player, selectedSlot, price, description) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const listingFee = settings.listingFee;
   const balance = getBalance(player);
 
@@ -220,7 +207,7 @@ function createListing(player, selectedSlot, price, description) {
 
   try {
     if (listingFee > 0) {
-      objective.addScore(player, -listingFee);
+      addBalance(player, -listingFee);
       feeReserved = true;
     }
 
@@ -266,7 +253,7 @@ function createListing(player, selectedSlot, price, description) {
     if (storageEntity) removeStorageEntity(storageEntity);
     if (feeReserved) {
       try {
-        objective.addScore(player, listingFee);
+        addBalance(player, listingFee);
       } catch (refundError) {
         console.error(
           `[Moolah Market] Failed to refund a listing fee: ${refundError?.stack ?? refundError}`,
@@ -396,7 +383,6 @@ function purchaseListing(buyer, propertyId) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const balance = getBalance(buyer);
   const settings = getEconomySettings();
   const taxAmount = calculateTax(
@@ -417,7 +403,7 @@ function purchaseListing(buyer, propertyId) {
     return;
   }
 
-  objective.addScore(buyer, -totalCost);
+  addBalance(buyer, -totalCost);
   const soldListing = {
     ...listing,
     status: "sold",
@@ -431,7 +417,7 @@ function purchaseListing(buyer, propertyId) {
   try {
     saveListing(soldListing);
   } catch {
-    objective.addScore(buyer, totalCost);
+    addBalance(buyer, totalCost);
     buyer.sendMessage("The purchase could not be completed. No funds were moved.");
     return;
   }
@@ -439,7 +425,7 @@ function purchaseListing(buyer, propertyId) {
   try {
     inventory.setItem(emptySlot, stored.item);
   } catch {
-    objective.addScore(buyer, totalCost);
+    addBalance(buyer, totalCost);
     try {
       saveListing(listing);
     } catch {
@@ -671,7 +657,7 @@ function cancelListing(player, propertyId) {
   if (listing.listingFee > 0) {
     if (settings.refundCanceledListingFees) {
       try {
-        getCurrencyObjective().addScore(player, listing.listingFee);
+        addBalance(player, listing.listingFee);
         listingFeeRefunded = true;
       } catch (error) {
         addToTaxPool(listing.listingFee);
@@ -723,12 +709,11 @@ function claimListingProceeds(player, propertyId) {
     return;
   }
 
-  const objective = getCurrencyObjective();
   const claimedListing = { ...listing, status: "claimed" };
 
   try {
     saveListing(claimedListing);
-    objective.addScore(player, listing.price);
+    addBalance(player, listing.price);
   } catch {
     saveListing(listing);
     player.sendMessage("The proceeds could not be claimed.");
