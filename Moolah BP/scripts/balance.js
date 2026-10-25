@@ -4,6 +4,7 @@ import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
 
 const LAST_KNOWN_BALANCE_PROPERTY = "moolah:last_known_balance";
 const knownBalances = new Map();
+const monitorWarnings = new Set();
 let monitorInitialized = false;
 
 export function getCurrencyObjective() {
@@ -11,9 +12,25 @@ export function getCurrencyObjective() {
     ?? world.scoreboard.addObjective("moolah", "Moolah");
 }
 
+function getScoreboardIdentity(player) {
+  try {
+    return player.scoreboardIdentity;
+  } catch {
+    return undefined;
+  }
+}
+
+function readBalance(objective, player) {
+  const identity = getScoreboardIdentity(player);
+  if (!identity) return undefined;
+  return objective.hasParticipant(identity)
+    ? objective.getScore(identity) ?? 0
+    : 0;
+}
+
 export function getBalance(player) {
   try {
-    return getCurrencyObjective().getScore(player) ?? 0;
+    return readBalance(getCurrencyObjective(), player) ?? 0;
   } catch {
     return 0;
   }
@@ -80,7 +97,8 @@ function reconcileBalance(player, currentBalance, collectExternalCharges) {
 }
 
 function reconcileBeforeMoolahWrite(player, objective) {
-  const currentBalance = objective.getScore(player) ?? 0;
+  const currentBalance = readBalance(objective, player);
+  if (currentBalance === undefined) return;
   reconcileBalance(
     player,
     currentBalance,
@@ -91,7 +109,7 @@ function reconcileBeforeMoolahWrite(player, objective) {
 export function addBalance(player, amount) {
   const objective = getCurrencyObjective();
   reconcileBeforeMoolahWrite(player, objective);
-  const balance = objective.addScore(player, amount);
+  const balance = objective.addScore(getScoreboardIdentity(player) ?? player, amount);
   rememberBalance(player, balance);
   return balance;
 }
@@ -99,7 +117,7 @@ export function addBalance(player, amount) {
 export function setBalance(player, amount) {
   const objective = getCurrencyObjective();
   reconcileBeforeMoolahWrite(player, objective);
-  objective.setScore(player, amount);
+  objective.setScore(getScoreboardIdentity(player) ?? player, amount);
   rememberBalance(player, amount);
 }
 
@@ -119,20 +137,32 @@ function monitorExternalBalanceChanges() {
     onlinePlayerIds.add(player.id);
 
     try {
+      const currentBalance = readBalance(objective, player);
+      if (currentBalance === undefined) {
+        monitorWarnings.delete(player.id);
+        continue;
+      }
       reconcileBalance(
         player,
-        objective.getScore(player) ?? 0,
+        currentBalance,
         collectExternalCharges,
       );
+      monitorWarnings.delete(player.id);
     } catch (error) {
-      console.warn(
-        `[Moolah] Could not monitor the balance for ${player.name}: ${error?.stack ?? error}`,
-      );
+      if (!monitorWarnings.has(player.id)) {
+        monitorWarnings.add(player.id);
+        console.warn(
+          `[Moolah] Could not monitor the balance for ${player.name}: ${error?.stack ?? error}`,
+        );
+      }
     }
   }
 
   for (const playerId of knownBalances.keys()) {
     if (!onlinePlayerIds.has(playerId)) knownBalances.delete(playerId);
+  }
+  for (const playerId of monitorWarnings) {
+    if (!onlinePlayerIds.has(playerId)) monitorWarnings.delete(playerId);
   }
 }
 

@@ -11,6 +11,8 @@
   records each successful collection in the Admin & Tax log.
 - Allowed unnamed undead mobs such as zombie horses to take normal fire damage
   inside fire-protected claims, even when they are not classified as hostile.
+- Fixed balance-monitor warnings on new worlds where a player does not yet have
+  a participant entry in the `moolah` scoreboard.
 
 ## 1.2.1 - 2026-10-15
 
