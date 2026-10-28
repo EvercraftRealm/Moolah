@@ -13,6 +13,8 @@
   inside fire-protected claims, even when they are not classified as hostile.
 - Fixed balance-monitor warnings on new worlds where a player does not yet have
   a participant entry in the `moolah` scoreboard.
+- Added optional BedLog Framework integration that forwards every successful
+  Moolah audit action through `blf:log` while retaining the built-in logs.
 
 ## 1.2.1 - 2026-10-15
 

@@ -7,6 +7,9 @@ const MAX_ENTRIES = 512;
 const ENTRIES_PER_SHARD = 32;
 const PAGE_SIZE = 20;
 const MAX_TEXT_LENGTH = 700;
+const BLF_EVENT_ID = "blf:log";
+const BLF_SOURCE = "Moolah";
+const BLF_MAX_MESSAGE_LENGTH = 1000;
 
 const LOG_CATEGORIES = [
   ["deposit", "Deposits"],
@@ -18,10 +21,11 @@ const LOG_CATEGORIES = [
   ["claim", "Claims"],
   ["admin", "Admin & Tax"],
 ];
+const LOG_CATEGORY_LABELS = new Map(LOG_CATEGORIES);
 
-function cleanText(value, fallback = "") {
+function cleanText(value, fallback = "", maxLength = MAX_TEXT_LENGTH) {
   const text = String(value ?? fallback).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ");
-  return text.length > MAX_TEXT_LENGTH ? `${text.slice(0, MAX_TEXT_LENGTH - 1)}…` : text;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
 function readJsonProperty(propertyId, fallback) {
@@ -68,23 +72,51 @@ function actorDetails(actor) {
   };
 }
 
-export function writeAuditLog(category, action, actor, details) {
+function sendBlfAuditLog(category, action, identity, details) {
+  const categoryLabel = LOG_CATEGORY_LABELS.get(category) ?? category;
+  const message = cleanText(
+    `[${categoryLabel}] ${action} | Player: ${identity.actorName}`
+      + `${details ? ` | ${details}` : ""}`,
+    "Moolah action",
+    BLF_MAX_MESSAGE_LENGTH,
+  );
+
   try {
+    system.sendScriptEvent(BLF_EVENT_ID, JSON.stringify({
+      source: BLF_SOURCE,
+      level: "info",
+      message,
+    }));
+  } catch (error) {
+    console.warn(`[Moolah BLF] Could not send log entry: ${error?.stack ?? error}`);
+  }
+}
+
+export function writeAuditLog(category, action, actor, details) {
+  let identity;
+  let cleanedCategory;
+  let cleanedAction;
+  let cleanedDetails;
+
+  try {
+    identity = actorDetails(actor);
+    cleanedCategory = cleanText(category, "admin");
+    cleanedAction = cleanText(action, "Action");
+    cleanedDetails = cleanText(details);
     const meta = getMeta();
     const sequence = meta.nextSequence;
     const slot = sequence % MAX_ENTRIES;
     const shardIndex = Math.floor(slot / ENTRIES_PER_SHARD);
     const shardSlot = slot % ENTRIES_PER_SHARD;
     const entries = getShard(shardIndex);
-    const identity = actorDetails(actor);
     entries[shardSlot] = {
       sequence,
       timestamp: Date.now(),
-      category: cleanText(category, "admin"),
-      action: cleanText(action, "Action"),
+      category: cleanedCategory,
+      action: cleanedAction,
       actorName: identity.actorName,
       actorId: identity.actorId,
-      details: cleanText(details),
+      details: cleanedDetails,
     };
     world.setDynamicProperty(
       shardPropertyId(shardIndex),
@@ -97,6 +129,16 @@ export function writeAuditLog(category, action, actor, details) {
     }));
   } catch (error) {
     console.warn(`[Moolah Audit] Could not save log entry: ${error?.stack ?? error}`);
+  }
+
+  try {
+    if (identity === undefined) identity = actorDetails(actor);
+    if (cleanedCategory === undefined) cleanedCategory = cleanText(category, "admin");
+    if (cleanedAction === undefined) cleanedAction = cleanText(action, "Action");
+    if (cleanedDetails === undefined) cleanedDetails = cleanText(details);
+    sendBlfAuditLog(cleanedCategory, cleanedAction, identity, cleanedDetails);
+  } catch (error) {
+    console.warn(`[Moolah BLF] Could not prepare log entry: ${error?.stack ?? error}`);
   }
 }
 

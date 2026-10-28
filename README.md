@@ -27,6 +27,7 @@ before installing or updating add-ons.
 - Escrowed online and offline player payments
 - QuickPay signs for convenient transfers
 - Detailed log system (Up to 512 recent entries) accessible by admins
+- Optional BedLog Framework forwarding for successful action logs
 - Configurable taxes and tax-return distribution
 - Optional mail system with offline-player support
 - Optional market system that preserves all native item data

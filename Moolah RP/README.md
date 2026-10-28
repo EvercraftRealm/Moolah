@@ -222,6 +222,8 @@ The Admin menu is organized into six categories:
   - **Minimum Warp Cost** — blank and without a minimum by default
   - **Max Warp Cost** — blank and uncapped by default
 
+Successful economy actions are also forwarded to the optional BedLog Framework using source **Moolah** when BedLog is installed. Moolah's built-in logs remain available independently.
+
 Taxes are charged in addition to the base value and added to the shared **Tax Pool**. Transfer taxes remain refundable while the payment is Pending and only enter the pool after the recipient accepts. When configured, the flat Death Tax is collected no more than once per player during its cooldown period; the player receives the result as Inbox Mail from **System**.
 
 When **Send External Charges to Tax Pool** is enabled, decreases made directly to a player's `moolah` scoreboard balance outside Moolah are added to the Tax Pool and recorded under **Admin & Tax** logs. Moolah's own charges and refunds are tracked separately and are not counted twice. The setting is off by default.

@@ -229,6 +229,7 @@ The Admin menu is organized into seven categories:
   - Separate logs for deposits, withdrawals, transfers, mail, Market actions, warps, claims, and admin/tax actions
   - Records completed actions only, with the newest entries first
   - Keeps up to 512 recent entries in bounded storage, with an optional **All Activity** overview
+  - Forwards successful actions to the optional BedLog Framework using source **Moolah** when BedLog is installed
 
 Taxes are charged in addition to the base value and added to the shared **Tax Pool**. Transfer taxes remain refundable while the payment is Pending and only enter the pool after the recipient accepts. When configured, the flat Death Tax is collected no more than once per player during its cooldown period; the player receives the result as Inbox Mail from **System**.
 
