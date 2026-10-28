@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.3 - 2026-10-25
+## 1.2.4 - 2026-10-28
 
 - Warmed the unclaimed claim-border tint to counter the particle's blue bias
   and render closer to neutral white in-game.
