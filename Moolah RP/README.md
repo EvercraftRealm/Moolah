@@ -66,7 +66,9 @@ Messages containing spaces must be enclosed in quotation marks. If Transfer Desc
 Every payment enters escrow first:
 
 - The sender's balance is charged immediately.
-- The recipient sees the payment in **Inbox**.
+- The recipient sees the payment in **Inbox**. **Accept All Payments** claims
+  every ready payment at once, summarizes the amounts by sender, and leaves
+  mail untouched for later reading.
 - The sender sees it in **Pending** and may cancel it for a full refund.
 - The recipient must wait 60 seconds before accepting it.
 - Once accepted, the payment can no longer be canceled.

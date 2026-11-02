@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5 - 2026-11-01
+
+- Added **Accept All Payments** at the top of the Inbox whenever payments are
+  ready, with one private summary grouped by sender.
+- Bulk payment claims leave mail untouched so recipients can still open and
+  read each message normally.
+
 ## 1.2.4 - 2026-10-28
 
 - Warmed the unclaimed claim-border tint to counter the particle's blue bias

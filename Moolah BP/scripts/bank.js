@@ -640,13 +640,15 @@ function createEscrowMail(sender, recipientName, message) {
   return true;
 }
 
-function acceptEscrowPayment(recipient, propertyId) {
-  const payment = getEscrowPayments().find(
+function acceptEscrowPayment(recipient, propertyId, options = {}) {
+  const { notifyRecipient = true, knownPayment } = options;
+  const payment = knownPayment ?? getEscrowPayments().find(
     (candidate) => candidate.propertyId === propertyId,
   );
 
   if (
     !payment ||
+    payment.propertyId !== propertyId ||
     !isPaymentRecipient(payment, recipient)
   ) {
     recipient.sendMessage("That incoming item is no longer available.");
@@ -674,9 +676,11 @@ function acceptEscrowPayment(recipient, propertyId) {
     }
 
     addToTaxPool(payment.taxAmount);
-    recipient.sendMessage(
-      `Accepted \uE102${payment.amount} from ${payment.senderName}.`,
-    );
+    if (notifyRecipient) {
+      recipient.sendMessage(
+        `Accepted \uE102${payment.amount} from ${payment.senderName}.`,
+      );
+    }
     writeAuditLog("transfer", "Transfer Accepted", recipient, `From ${payment.senderName}; ${payment.amount} Moolah received; ${payment.taxAmount} tax moved to the Tax Pool.`);
   } else {
     addToTaxPool(payment.postageCost);
@@ -691,6 +695,53 @@ function acceptEscrowPayment(recipient, propertyId) {
     ? `${recipient.name} accepted your mail.`
     : `${recipient.name} accepted your payment of \uE102${payment.amount}.`);
   return true;
+}
+
+function formatClaimedPaymentSummary(claimedBySender) {
+  const entries = [...claimedBySender.values()].map(
+    ({ senderName, amount }) => `${MINECOIN_GLYPH}${amount} from ${senderName}`,
+  );
+
+  if (entries.length === 1) return entries[0];
+  if (entries.length === 2) return `${entries[0]} and ${entries[1]}`;
+  return `${entries.slice(0, -1).join(", ")}, and ${entries[entries.length - 1]}`;
+}
+
+function acceptAllEscrowPayments(recipient) {
+  const claimedBySender = new Map();
+  const payments = getEscrowPayments().filter(
+    (payment) => isPaymentRecipient(payment, recipient),
+  );
+
+  for (const payment of payments) {
+    if (
+      payment.kind !== "transfer"
+      || payment.acceptAfter > Date.now()
+      || !acceptEscrowPayment(recipient, payment.propertyId, {
+        knownPayment: payment,
+        notifyRecipient: false,
+      })
+    ) {
+      continue;
+    }
+
+    const senderKey = payment.senderName.toLowerCase();
+    const claimed = claimedBySender.get(senderKey) ?? {
+      senderName: payment.senderName,
+      amount: 0,
+    };
+    claimed.amount += payment.amount;
+    claimedBySender.set(senderKey, claimed);
+  }
+
+  if (claimedBySender.size === 0) {
+    recipient.sendMessage("No payments are ready to claim yet.");
+    return;
+  }
+
+  recipient.sendMessage(
+    `You claimed ${formatClaimedPaymentSummary(claimedBySender)}.`,
+  );
 }
 
 function confirmIncomingPayment(recipient, payment, onBack) {
@@ -741,6 +792,9 @@ export function openInboxMenu(recipient, onBack) {
   const payments = getEscrowPayments().filter(
     (payment) => isPaymentRecipient(payment, recipient),
   );
+  const readyPaymentCount = payments.filter(
+    (payment) => payment.kind === "transfer" && payment.acceptAfter <= Date.now(),
+  ).length;
 
   if (payments.length === 0) {
     recipient.sendMessage("Your inbox has no pending items.");
@@ -751,6 +805,12 @@ export function openInboxMenu(recipient, onBack) {
   const inboxForm = new ActionFormData()
     .title("Inbox")
     .body("Select an item to review and accept it.");
+
+  if (readyPaymentCount > 0) {
+    inboxForm.button(
+      `Accept All Payments\n${readyPaymentCount} ready`,
+    );
+  }
 
   for (const payment of payments) {
     inboxForm.button(payment.kind === "mail"
@@ -766,7 +826,16 @@ export function openInboxMenu(recipient, onBack) {
 
     if (response.selection === undefined) return;
 
-    const payment = payments[response.selection];
+    if (readyPaymentCount > 0 && response.selection === 0) {
+      system.run(() => {
+        acceptAllEscrowPayments(recipient);
+        openInboxMenu(recipient, onBack);
+      });
+      return;
+    }
+
+    const paymentIndex = response.selection - (readyPaymentCount > 0 ? 1 : 0);
+    const payment = payments[paymentIndex];
 
     if (payment) {
       system.run(() => confirmIncomingPayment(
