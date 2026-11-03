@@ -90,6 +90,8 @@ Mail may have a postage cost configured by an economy admin. The cost is shown b
 
 When enabled by an economy admin, choose **Warp** as the final option in the main menu or run `/warp`. You can warp to another online player, world spawn, or your Home spawn point. Home falls back to world spawn when no personal spawn point is available.
 
+Admins can optionally enable **Emergency Warp**. It is always the first, red destination and sends a player to world spawn for free after a 30-second countdown. Moving more than about one block, jumping, taking damage, changing dimensions, disconnecting, or an admin disabling the feature cancels the attempt. A successful Emergency Warp has an eight-hour per-player cooldown; cancelled and failed attempts do not use it.
+
 Warp prices are based on horizontal distance, rounded up to the next 100-block increment. Overworld-to-Nether travel converts Nether coordinates to their equivalent Overworld scale before measuring distance, accounting for Minecraft's 1:8 coordinate ratio. Travel between dimensions then uses the configured Interdimensional Multiplier. Economy admins may optionally set minimum and maximum Warp costs; leaving either field blank disables that limit. The confirmation screen shows the destination, priced distance, configured rate, dimension multiplier when applicable, configured limits, and final cost before anything is charged. Successful Warp costs move into the Tax Pool; failed teleports are refunded.
 
 When joining the world, players receive a color-coded summary if they have incoming items, outgoing Pending items, unclaimed Market proceeds, or active Market listings.
@@ -226,6 +228,7 @@ The Admin menu is organized into seven categories:
   - **Refund Cancelled Mail Postage** — on by default
 - **Warp**
   - **Allow Warp** — off by default; also controls `/warp`
+  - **Enable Emergency Warp** — off by default; adds a free, delayed escape to world spawn with an eight-hour cooldown
   - **Warp Cost (per 100 blocks)** — 10 moolah by default
   - **Interdimensional Multiplier** — 2x by default; configurable from 1x to 5x
   - **Minimum Warp Cost** — blank and without a minimum by default

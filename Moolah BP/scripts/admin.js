@@ -411,6 +411,9 @@ function openWarpAdminMenu(player, onBack) {
   const form = new ModalFormData()
     .title("Warp")
     .toggle("Allow Warp", { defaultValue: settings.allowWarp })
+    .toggle("Enable Emergency Warp", {
+      defaultValue: settings.enableEmergencyWarp,
+    })
     .textField("Warp Cost (per 100 blocks)", "0 or more", {
       defaultValue: String(settings.warpCostPer100),
     })
@@ -439,6 +442,7 @@ function openWarpAdminMenu(player, onBack) {
 
     const [
       allowWarp,
+      enableEmergencyWarp,
       warpCostValue,
       interdimensionalWarpMultiplier,
       minWarpCostValue,
@@ -463,6 +467,7 @@ function openWarpAdminMenu(player, onBack) {
 
     if (
       typeof allowWarp !== "boolean"
+      || typeof enableEmergencyWarp !== "boolean"
       || !/^\d+$/.test(warpCostText)
       || !Number.isSafeInteger(warpCostPer100)
       || !Number.isSafeInteger(interdimensionalWarpMultiplier)
@@ -488,6 +493,7 @@ function openWarpAdminMenu(player, onBack) {
 
     saveAdminSettings(player, "Warp", {
       allowWarp,
+      enableEmergencyWarp,
       warpCostPer100,
       interdimensionalWarpMultiplier,
       minWarpCost,

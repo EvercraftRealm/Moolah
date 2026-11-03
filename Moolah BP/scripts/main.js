@@ -15,7 +15,7 @@ import {
   openBrowseListings,
 } from "./market.js";
 import { openAdminMenu } from "./admin.js";
-import { openWarpMenu } from "./warp.js";
+import { isEmergencyWarpActive, openWarpMenu } from "./warp.js";
 import { giveFirstJoinGuide } from "./guide.js";
 import {
   initializeClaimSystem,
@@ -363,18 +363,23 @@ function updateHeldDiamondBalances() {
     const heldItem = inventory?.getItem(player.selectedSlotIndex);
     const isHoldingBankItem = BANK_OPEN_ITEM_TYPES.has(heldItem?.typeId);
     const claimMessageActive = isClaimActionbarActive(player);
+    const emergencyWarpActive = isEmergencyWarpActive(player);
 
     if (isHoldingBankItem) {
       const refundTimer = settings.distributeTaxes
         ? ` | ${getTaxRefundTimerText(player, now)}`
         : "";
-      if (!claimMessageActive) {
+      if (!claimMessageActive && !emergencyWarpActive) {
         player.onScreenDisplay.setActionBar(
           `Balance: \uE102${getBalance(player)}${refundTimer}`,
         );
       }
       playersShowingBalance.add(player.id);
-    } else if (playersShowingBalance.delete(player.id) && !claimMessageActive) {
+    } else if (
+      playersShowingBalance.delete(player.id)
+      && !claimMessageActive
+      && !emergencyWarpActive
+    ) {
       player.onScreenDisplay.setActionBar("");
     }
   }
@@ -629,7 +634,7 @@ system.beforeEvents.startup.subscribe((event) => {
   commandRegistry.registerCommand(
     {
       name: "moolah:warp",
-      description: "Open the paid Warp menu.",
+      description: "Open the Warp menu.",
       permissionLevel: CommandPermissionLevel.Any,
       cheatsRequired: false,
     },

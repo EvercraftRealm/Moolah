@@ -7,6 +7,11 @@ import { getMoolahPlayers } from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const NETHER_COORDINATE_SCALE = 8;
+const EMERGENCY_WARP_COOLDOWN_PROPERTY = "moolah:emergency_warp_last_ms";
+const EMERGENCY_WARP_COOLDOWN_MS = 8 * 60 * 60 * 1000;
+const EMERGENCY_WARP_COUNTDOWN_MS = 30 * 1000;
+const EMERGENCY_WARP_MOVEMENT_LIMIT = 1.1;
+const emergencyWarpSessions = new Map();
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
@@ -51,6 +56,225 @@ function getHomeDestination(player) {
 
 function getDimensionName(dimension) {
   return dimension.id.replace(/^minecraft:/, "");
+}
+
+function getEmergencyWarpCooldownRemaining(player, now = Date.now()) {
+  const lastWarp = player.getDynamicProperty(EMERGENCY_WARP_COOLDOWN_PROPERTY);
+  if (typeof lastWarp !== "number" || !Number.isFinite(lastWarp)) return 0;
+  const elapsed = Math.max(0, now - lastWarp);
+  return Math.max(0, EMERGENCY_WARP_COOLDOWN_MS - elapsed);
+}
+
+function formatDuration(milliseconds) {
+  const totalSeconds = Math.max(1, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function cancelEmergencyWarp(player, reason) {
+  if (!emergencyWarpSessions.delete(player.id)) return;
+  const message = `Emergency Warp cancelled: ${reason}.`;
+  player.onScreenDisplay.setActionBar(`§c${message}`);
+  player.sendMessage(message);
+}
+
+function completeEmergencyWarp(player) {
+  const session = emergencyWarpSessions.get(player.id);
+  if (!session) return;
+  emergencyWarpSessions.delete(player.id);
+
+  let destination;
+  let previousCooldown;
+  try {
+    destination = getWorldSpawnDestination();
+    previousCooldown = player.getDynamicProperty(EMERGENCY_WARP_COOLDOWN_PROPERTY);
+    player.setDynamicProperty(EMERGENCY_WARP_COOLDOWN_PROPERTY, Date.now());
+  } catch (error) {
+    console.error(`[Moolah] Emergency Warp could not start: ${error?.stack ?? error}`);
+    player.onScreenDisplay.setActionBar("§cEmergency Warp failed.");
+    player.sendMessage("Emergency Warp could not be completed. Your cooldown was not used.");
+    return;
+  }
+
+  try {
+    player.teleport(destination.location, { dimension: destination.dimension });
+  } catch (error) {
+    try {
+      player.setDynamicProperty(EMERGENCY_WARP_COOLDOWN_PROPERTY, previousCooldown);
+    } catch (rollbackError) {
+      console.error(
+        `[Moolah] Emergency Warp cooldown rollback failed: ${rollbackError?.stack ?? rollbackError}`,
+      );
+    }
+    console.error(`[Moolah] Emergency Warp failed: ${error?.stack ?? error}`);
+    player.onScreenDisplay.setActionBar("§cEmergency Warp failed.");
+    player.sendMessage("Emergency Warp could not be completed. Your cooldown was not used.");
+    return;
+  }
+
+  player.onScreenDisplay.setActionBar("§aEmergency Warp complete.");
+  player.sendMessage("Emergency Warp complete. You have been sent to Spawn.");
+  writeAuditLog(
+    "warp",
+    "Emergency Warp Completed",
+    player,
+    `Destination: Spawn; overworld at ${Math.floor(destination.location.x)}, ${Math.floor(destination.location.y)}, ${Math.floor(destination.location.z)}; cost 0 Moolah; cooldown 8 hours.`,
+  );
+}
+
+function updateEmergencyWarps() {
+  if (emergencyWarpSessions.size === 0) return;
+
+  const playersById = new Map(
+    getMoolahPlayers().map((player) => [player.id, player]),
+  );
+  const now = Date.now();
+
+  for (const [playerId, session] of emergencyWarpSessions) {
+    const player = playersById.get(playerId);
+    if (!player) {
+      emergencyWarpSessions.delete(playerId);
+      continue;
+    }
+
+    const settings = getEconomySettings();
+    if (!settings.allowWarp || !settings.enableEmergencyWarp) {
+      cancelEmergencyWarp(player, "it was disabled by an admin");
+      continue;
+    }
+
+    try {
+      if (player.dimension.id !== session.dimensionId) {
+        cancelEmergencyWarp(player, "you changed dimensions");
+        continue;
+      }
+      if (player.isJumping) {
+        cancelEmergencyWarp(player, "you jumped");
+        continue;
+      }
+
+      const distance = Math.hypot(
+        player.location.x - session.location.x,
+        player.location.y - session.location.y,
+        player.location.z - session.location.z,
+      );
+      if (distance > EMERGENCY_WARP_MOVEMENT_LIMIT) {
+        cancelEmergencyWarp(player, "you moved too far");
+        continue;
+      }
+    } catch (error) {
+      console.warn(`[Moolah] Emergency Warp movement check failed: ${error?.stack ?? error}`);
+      cancelEmergencyWarp(player, "your position could not be checked");
+      continue;
+    }
+
+    const remainingMs = session.endsAt - now;
+    if (remainingMs <= 0) {
+      completeEmergencyWarp(player);
+      continue;
+    }
+
+    const seconds = Math.ceil(remainingMs / 1000);
+    if (seconds !== session.lastDisplayedSecond) {
+      session.lastDisplayedSecond = seconds;
+      player.onScreenDisplay.setActionBar(
+        `§cEmergency Warp: §f${seconds}s §7— Do not move, jump, or take damage`,
+      );
+    }
+  }
+}
+
+function startEmergencyWarp(player) {
+  const settings = getEconomySettings();
+  if (!settings.allowWarp || !settings.enableEmergencyWarp) {
+    player.sendMessage("Emergency Warp is currently disabled.");
+    return;
+  }
+  if (emergencyWarpSessions.has(player.id)) {
+    player.sendMessage("Your Emergency Warp countdown is already running.");
+    return;
+  }
+
+  let remainingCooldown;
+  try {
+    remainingCooldown = getEmergencyWarpCooldownRemaining(player);
+  } catch (error) {
+    console.error(`[Moolah] Emergency Warp cooldown check failed: ${error?.stack ?? error}`);
+    player.sendMessage("Your Emergency Warp cooldown could not be checked.");
+    return;
+  }
+  if (remainingCooldown > 0) {
+    player.sendMessage(
+      `Emergency Warp will be available again in ${formatDuration(remainingCooldown)}.`,
+    );
+    return;
+  }
+
+  const now = Date.now();
+  emergencyWarpSessions.set(player.id, {
+    dimensionId: player.dimension.id,
+    location: { ...player.location },
+    endsAt: now + EMERGENCY_WARP_COUNTDOWN_MS,
+    lastDisplayedSecond: undefined,
+  });
+  player.sendMessage(
+    "Emergency Warp started. Do not move more than one block, jump, or take damage for 30 seconds.",
+  );
+  updateEmergencyWarps();
+}
+
+function openEmergencyWarpWarning(player, onBack) {
+  const settings = getEconomySettings();
+  if (!settings.allowWarp || !settings.enableEmergencyWarp) {
+    player.sendMessage("Emergency Warp is currently disabled.");
+    goBack(onBack);
+    return;
+  }
+
+  let remainingCooldown;
+  try {
+    remainingCooldown = getEmergencyWarpCooldownRemaining(player);
+  } catch (error) {
+    console.error(`[Moolah] Emergency Warp cooldown check failed: ${error?.stack ?? error}`);
+    player.sendMessage("Your Emergency Warp cooldown could not be checked.");
+    goBack(onBack);
+    return;
+  }
+  if (remainingCooldown > 0) {
+    player.sendMessage(
+      `Emergency Warp will be available again in ${formatDuration(remainingCooldown)}.`,
+    );
+    goBack(onBack);
+    return;
+  }
+
+  const form = new MessageFormData()
+    .title("Emergency Warp")
+    .body(
+      "Emergency Warp is free and sends you to Spawn after 30 seconds.\n\n"
+      + "Do not move more than one block, jump, or take any damage during the countdown. "
+      + "Doing so cancels the warp without using your eight-hour cooldown.",
+    )
+    .button1("Start Emergency Warp")
+    .button2("Back");
+
+  form.show(player).then((response) => {
+    if (response.canceled || response.selection === 1) {
+      goBack(onBack);
+    } else if (response.selection === 0) {
+      system.run(() => startEmergencyWarp(player));
+    }
+  }).catch(() => {
+    player.sendMessage("The Emergency Warp warning could not be opened.");
+  });
+}
+
+export function isEmergencyWarpActive(player) {
+  return emergencyWarpSessions.has(player.id);
 }
 
 function isOverworldNetherWarp(sourceDimension, destinationDimension) {
@@ -219,7 +443,8 @@ function openWarpConfirmation(player, destination, onBack) {
 }
 
 export function openWarpMenu(player, onBack) {
-  if (!getEconomySettings().allowWarp) {
+  const settings = getEconomySettings();
+  if (!settings.allowWarp) {
     player.sendMessage("Warp is currently disabled.");
     goBack(onBack);
     return;
@@ -229,6 +454,7 @@ export function openWarpMenu(player, onBack) {
     (candidate) => candidate.id !== player.id,
   );
   const options = [
+    ...(settings.enableEmergencyWarp ? ["§cEmergency Warp§r"] : []),
     ...targetPlayers.map((candidate) => candidate.name),
     "Spawn",
     "Home",
@@ -254,10 +480,19 @@ export function openWarpMenu(player, onBack) {
 
     system.run(() => {
       try {
+        if (settings.enableEmergencyWarp && selection === 0) {
+          openEmergencyWarpWarning(
+            player,
+            () => openWarpMenu(player, onBack),
+          );
+          return;
+        }
+
+        const destinationSelection = selection - (settings.enableEmergencyWarp ? 1 : 0);
         let destination;
 
-        if (selection < targetPlayers.length) {
-          const selectedPlayerId = targetPlayers[selection]?.id;
+        if (destinationSelection < targetPlayers.length) {
+          const selectedPlayerId = targetPlayers[destinationSelection]?.id;
           const target = getMoolahPlayers().find(
             (candidate) => candidate.id === selectedPlayerId,
           );
@@ -272,9 +507,9 @@ export function openWarpMenu(player, onBack) {
             dimension: target.dimension,
             location: { ...target.location },
           };
-        } else if (selection === targetPlayers.length) {
+        } else if (destinationSelection === targetPlayers.length) {
           destination = getWorldSpawnDestination();
-        } else if (selection === targetPlayers.length + 1) {
+        } else if (destinationSelection === targetPlayers.length + 1) {
           destination = getHomeDestination(player);
         }
 
@@ -297,3 +532,11 @@ export function openWarpMenu(player, onBack) {
     player.sendMessage("The Warp menu could not be opened.");
   });
 }
+
+world.afterEvents.entityHurt.subscribe((event) => {
+  const player = event.hurtEntity;
+  if (player.typeId !== "minecraft:player" || !emergencyWarpSessions.has(player.id)) return;
+  cancelEmergencyWarp(player, "you took damage");
+});
+
+system.runInterval(updateEmergencyWarps, 1);

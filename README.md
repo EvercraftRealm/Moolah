@@ -33,7 +33,7 @@ before installing or updating add-ons.
 - Configurable taxes and tax-return distribution
 - Optional mail system with offline-player support
 - Optional market system that preserves all native item data
-- Optional warp system with distance & dimensional pricing
+- Optional warp system with distance and dimensional pricing, plus an opt-in Emergency Warp
 - Optional claim system with paid chunk-claims and user-configured protections
 - Achievement-friendly first-player administration
 
