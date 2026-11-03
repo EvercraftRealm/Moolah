@@ -4,8 +4,8 @@
 
 - Added the **Moolah Pouch**, a reusable item that shows the player's balance
   while held and opens the Moolah menu when used.
-- Added two automatically unlocked shapeless recipes: Bundle + Ender Pearl, or
-  Leather + String + Ender Pearl.
+- Added an automatically unlocked shapeless recipe using a Bundle and an Ender
+  Pearl.
 - Added a vanilla-style bundle texture with a Minecoin emblem on the front.
 
 ## 1.2.6 - 2026-11-03
