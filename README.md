@@ -18,7 +18,7 @@ cheats.
    be available alongside it.
 4. Join the world and follow the Moolah Guide. Run `/bank` to open the menu.
 
-Moolah requires Minecraft Bedrock 1.26.10 or newer. Back up important worlds
+Moolah requires Minecraft Bedrock 1.26.60 or newer. Back up important worlds
 before installing or updating add-ons.
 
 ## Features
@@ -28,6 +28,7 @@ before installing or updating add-ons.
 - QuickPay signs for convenient transfers
 - Detailed log system (Up to 512 recent entries) accessible by admins
 - Optional BedLog Framework forwarding for successful action logs
+- BedrockUnplugged ghost-player compatibility
 - Configurable taxes and tax-return distribution
 - Optional mail system with offline-player support
 - Optional market system that preserves all native item data

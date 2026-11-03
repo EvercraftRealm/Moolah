@@ -11,6 +11,7 @@ import {
 } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
 import { addBalance, getBalance } from "./balance.js";
+import { getMoolahPlayers } from "./players.js";
 
 const DEPOSIT_QUANTITIES = [1, 4, 16, 64];
 const ESCROW_PROPERTY_PREFIX = "moolah:escrow:";
@@ -475,7 +476,7 @@ function createSystemInboxItem(recipientName, kind, amount, message) {
     return false;
   }
 
-  const onlineRecipient = world.getPlayers().find(
+  const onlineRecipient = getMoolahPlayers().find(
     (player) => player.name.toLowerCase() === recipientName.toLowerCase(),
   );
   onlineRecipient?.sendMessage(
@@ -573,7 +574,7 @@ function createEscrowPayment(sender, recipientName, amount, message = "") {
   );
   writeAuditLog("transfer", "Transfer Created", sender, `To ${recipientName}; ${amount} Moolah (${taxAmount} tax) placed in escrow.`);
 
-  const onlineRecipient = world.getPlayers().find(
+  const onlineRecipient = getMoolahPlayers().find(
     (player) => player.name.toLowerCase() === recipientName.toLowerCase(),
   );
   onlineRecipient?.sendMessage(
@@ -631,7 +632,7 @@ function createEscrowMail(sender, recipientName, message) {
   );
   writeAuditLog("mail", "Mail Sent", sender, `To ${recipientName}; ${postageCost} Moolah postage.`);
 
-  const onlineRecipient = world.getPlayers().find(
+  const onlineRecipient = getMoolahPlayers().find(
     (player) => player.name.toLowerCase() === recipientName.toLowerCase(),
   );
   onlineRecipient?.sendMessage(
@@ -688,7 +689,7 @@ function acceptEscrowPayment(recipient, propertyId, options = {}) {
     writeAuditLog("mail", "Mail Accepted", recipient, `From ${payment.senderName}; ${payment.postageCost} Moolah postage moved to the Tax Pool.`);
   }
 
-  const sender = world.getPlayers().find(
+  const sender = getMoolahPlayers().find(
     (player) => player.id === payment.senderId,
   );
   sender?.sendMessage(payment.kind === "mail"
@@ -1014,7 +1015,7 @@ export function openTransferMenu(sender, onBack) {
     return;
   }
 
-  const onlineRecipientNames = world.getPlayers()
+  const onlineRecipientNames = getMoolahPlayers()
     .filter((player) => player.id !== sender.id)
     .map((player) => player.name);
   const recipientOptions = [
@@ -1156,7 +1157,7 @@ export function openMailMenu(sender, onBack) {
     return;
   }
 
-  const onlineRecipientNames = world.getPlayers()
+  const onlineRecipientNames = getMoolahPlayers()
     .filter((player) => player.id !== sender.id)
     .map((player) => player.name);
   const recipientOptions = [

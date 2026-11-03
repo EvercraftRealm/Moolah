@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.6 - 2026-11-03
+
+- Added BedrockUnplugged compatibility by safely ignoring unreadable players
+  and entities tagged `unplugged.bot` across Moolah systems.
+- Deferred first-spawn handling by one tick so Unplugged can identify its
+  ghosts before Moolah assigns an admin, guide, or login notifications.
+- Raised the minimum supported Minecraft Bedrock version to 1.26.60 and the
+  `@minecraft/server` dependency to 2.10.0.
+
 ## 1.2.5 - 2026-11-01
 
 - Added **Accept All Payments** at the top of the Inbox whenever payments are

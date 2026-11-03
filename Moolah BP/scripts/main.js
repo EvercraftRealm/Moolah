@@ -53,6 +53,7 @@ import {
   getBalance,
   initializeBalanceMonitor,
 } from "./balance.js";
+import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const FIRST_ADMIN_PROPERTY = "moolah:first_admin_assigned";
@@ -289,7 +290,7 @@ function updateTaxRefundTimers() {
   const settings = getEconomySettings();
   const onlinePlayerIds = new Set();
 
-  for (const player of world.getPlayers()) {
+  for (const player of getMoolahPlayers()) {
     onlinePlayerIds.add(player.id);
 
     try {
@@ -347,7 +348,7 @@ function updateHeldDiamondBalances() {
   const now = Date.now();
   const settings = getEconomySettings();
 
-  for (const player of world.getPlayers()) {
+  for (const player of getMoolahPlayers()) {
     onlinePlayerIds.add(player.id);
 
     const inventory = getInventory(player);
@@ -470,17 +471,19 @@ function openShop(player) {
 
 function playerCommand(callback) {
   return (origin, ...parameters) => {
+    const player = origin.sourceEntity;
     if (
       origin.sourceType !== CustomCommandSource.Entity
-      || origin.sourceEntity?.typeId !== "minecraft:player"
+      || !player
+      || player.typeId !== "minecraft:player"
+      || !isMoolahPlayer(player)
     ) {
       return {
         status: CustomCommandStatus.Failure,
         message: "This command can only be used by a player.",
       };
     }
-
-    return callback(origin.sourceEntity, ...parameters);
+    return callback(player, ...parameters);
   };
 }
 
@@ -838,7 +841,7 @@ system.beforeEvents.startup.subscribe((event) => {
 });
 
 world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
-  if (event.cancel || !event.isFirstEvent) return;
+  if (event.cancel || !event.isFirstEvent || !isMoolahPlayer(event.player)) return;
 
   const quickPay = readQuickPaySign(event.block);
 
@@ -863,23 +866,40 @@ world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
 });
 
 world.afterEvents.itemUse.subscribe((event) => {
-  if (event.itemStack.typeId !== "minecraft:diamond") return;
+  if (
+    event.itemStack.typeId !== "minecraft:diamond"
+    || !isMoolahPlayer(event.source)
+  ) return;
 
   system.run(() => openShop(event.source));
 });
 
 world.afterEvents.entityDie.subscribe((event) => {
-  if (event.deadEntity.typeId !== "minecraft:player") return;
+  const player = event.deadEntity;
+  if (
+    !player
+    || player.typeId !== "minecraft:player"
+    || !isMoolahPlayer(player)
+  ) return;
 
-  system.run(() => applyDeathTax(event.deadEntity));
+  system.run(() => applyDeathTax(player));
 });
 
 world.afterEvents.playerSpawn.subscribe((event) => {
   if (!event.initialSpawn) return;
+  const player = event.player;
+  if (!player) return;
 
-  system.run(() => assignFirstEconomyAdmin(event.player));
-  system.runTimeout(() => giveFirstJoinGuide(event.player), 10);
-  system.runTimeout(() => sendLoginNotifications(event.player), 20);
+  system.run(() => {
+    if (!isMoolahPlayer(player)) return;
+    assignFirstEconomyAdmin(player);
+    system.runTimeout(() => {
+      if (isMoolahPlayer(player)) giveFirstJoinGuide(player);
+    }, 9);
+    system.runTimeout(() => {
+      if (isMoolahPlayer(player)) sendLoginNotifications(player);
+    }, 19);
+  });
 });
 
 system.runInterval(updateHeldDiamondBalances, 5);

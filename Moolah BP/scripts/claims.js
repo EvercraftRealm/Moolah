@@ -13,6 +13,7 @@ import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/serve
 import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
 import { addBalance, getBalance, setBalance } from "./balance.js";
+import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const OWNER_KEY_PROPERTY = "moolah:claim_owner_key";
@@ -995,7 +996,7 @@ function inviteFriend(player, username) {
     return;
   }
 
-  const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
+  const onlineTarget = getMoolahPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
   const nextProfile = {
     ...profile,
     ownerName: player.name,
@@ -1035,7 +1036,7 @@ function uninviteFriend(player, username) {
   try {
     saveProfile({ ...profile, ownerName: player.name, friends: remaining });
     player.sendMessage(`${targetName} can no longer access any of your claimed chunks.`);
-    const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
+    const onlineTarget = getMoolahPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
     onlineTarget?.sendMessage(`${player.name} removed your access to all of their claimed chunks.`);
     writeAuditLog("claim", "Claim Friend Removed", player, `${targetName} lost full access to all claims.`);
   } catch (error) {
@@ -1073,7 +1074,7 @@ function openClaimInviteMenu(player, onBack) {
   }
 
   const invitedKeys = new Set(profile.friends.map((friend) => friend.key));
-  const onlineNames = world.getPlayers()
+  const onlineNames = getMoolahPlayers()
     .filter((candidate) => (
       candidate.id !== player.id
       && !invitedKeys.has(normalizeName(candidate.name))
@@ -1194,7 +1195,7 @@ function addGuest(player, username, durationValue) {
     return;
   }
 
-  const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
+  const onlineTarget = getMoolahPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
   const guest = {
     key: targetKey,
     name: onlineTarget?.name ?? targetName,
@@ -1235,7 +1236,7 @@ function removeGuest(player, username) {
   try {
     saveProfile({ ...profile, ownerName: player.name, guests: remaining });
     player.sendMessage(`${targetName} is no longer a guest on your claims.`);
-    const onlineTarget = world.getPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
+    const onlineTarget = getMoolahPlayers().find((candidate) => normalizeName(candidate.name) === targetKey);
     onlineTarget?.sendMessage(`${player.name} removed your guest access to their claims.`);
     writeAuditLog("claim", "Claim Guest Removed", player, `${targetName} lost guest access to all claims.`);
   } catch (error) {
@@ -1271,7 +1272,7 @@ function openClaimGuestMenu(player, onBack) {
   }
 
   const friendKeys = new Set(profile.friends.map((friend) => friend.key));
-  const onlineNames = world.getPlayers()
+  const onlineNames = getMoolahPlayers()
     .filter((candidate) => candidate.id !== player.id && !friendKeys.has(normalizeName(candidate.name)))
     .map((candidate) => candidate.name);
   const options = [...onlineNames, "Offline Player"];
@@ -1515,7 +1516,7 @@ function finishWalkMode(player, session) {
 function updateWalkSessions() {
   if (!getEconomySettings().allowClaims) {
     if (walkSessions.size > 0) {
-      for (const player of world.getPlayers()) {
+      for (const player of getMoolahPlayers()) {
         if (walkSessions.delete(player.id)) player.sendMessage("Walk & Claim was canceled because claims were disabled.");
       }
     }
@@ -1523,7 +1524,7 @@ function updateWalkSessions() {
   }
 
   const onlineIds = new Set();
-  for (const player of world.getPlayers()) {
+  for (const player of getMoolahPlayers()) {
     onlineIds.add(player.id);
     const session = walkSessions.get(player.id);
     if (!session) continue;
@@ -1744,7 +1745,7 @@ function drawLoadedClaimViewChunks(player, center, chunks, y, budget) {
 
 function updateClaimViews() {
   if (claimViewPlayers.size === 0) return;
-  const players = world.getPlayers();
+  const players = getMoolahPlayers();
   const onlineIds = new Set(players.map((player) => player.id));
 
   if (!getEconomySettings().allowClaims) {
@@ -1788,7 +1789,7 @@ function claimAreaLabel(state) {
 function updateClaimEntryMessages() {
   const settings = getEconomySettings();
   const onlineIds = new Set();
-  for (const player of world.getPlayers()) {
+  for (const player of getMoolahPlayers()) {
     onlineIds.add(player.id);
     const chunk = getChunk(player.location);
     const currentKey = chunkKey(player.dimension.id, chunk.x, chunk.z);
@@ -1983,11 +1984,11 @@ function getPlacementLocation(event) {
 
 function getDamagePlayer(damageSource) {
   const direct = damageSource?.damagingEntity;
-  if (direct?.typeId === "minecraft:player") return direct;
+  if (direct?.typeId === "minecraft:player" && isMoolahPlayer(direct)) return direct;
   try {
     const owner = damageSource?.damagingProjectile
       ?.getComponent("minecraft:projectile")?.owner;
-    if (owner?.typeId === "minecraft:player") return owner;
+    if (owner?.typeId === "minecraft:player" && isMoolahPlayer(owner)) return owner;
   } catch {
     // Some projectile types do not expose a projectile component.
   }
@@ -1997,7 +1998,9 @@ function getDamagePlayer(damageSource) {
 function getProjectilePlayer(projectile) {
   try {
     const owner = projectile?.getComponent("minecraft:projectile")?.owner;
-    return owner?.typeId === "minecraft:player" ? owner : undefined;
+    return owner?.typeId === "minecraft:player" && isMoolahPlayer(owner)
+      ? owner
+      : undefined;
   } catch {
     return undefined;
   }
@@ -2162,7 +2165,7 @@ function enqueueFireScanTasks() {
     return;
   }
 
-  for (const player of world.getPlayers()) {
+  for (const player of getMoolahPlayers()) {
     const dimension = player.dimension;
     const center = getChunk(player.location);
     const heightRange = dimension.heightRange;
@@ -2307,17 +2310,18 @@ export function registerClaimCommand(commandRegistry) {
       ],
     },
     (origin, actionValue, value) => {
+      const player = origin.sourceEntity;
       if (
         origin.sourceType !== CustomCommandSource.Entity
-        || origin.sourceEntity?.typeId !== "minecraft:player"
+        || !player
+        || player.typeId !== "minecraft:player"
+        || !isMoolahPlayer(player)
       ) {
         return {
           status: CustomCommandStatus.Failure,
           message: "This command can only be used by a player.",
         };
       }
-
-      const player = origin.sourceEntity;
       if (!getEconomySettings().allowClaims) {
         return { status: CustomCommandStatus.Failure, message: "Claims are currently disabled." };
       }
@@ -2398,9 +2402,11 @@ export function initializeClaimSystem() {
   initialized = true;
 
   world.beforeEvents.playerBreakBlock.subscribe((event) => {
+    if (!isMoolahPlayer(event.player)) return;
     cancelIfUnauthorized(event, event.player, event.dimension, event.block.location);
   });
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
+    if (!isMoolahPlayer(event.player)) return;
     const claim = getClaimAt(event.block.dimension, event.block.location);
     if (claim && hasGuestAccess(event.player, claim) && !hasEditAccess(event.player, claim)) {
       cancelGuestBlockInteraction(event);
@@ -2413,14 +2419,21 @@ export function initializeClaimSystem() {
     }
   });
   world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
+    if (!isMoolahPlayer(event.player)) return;
     cancelGuestEntityInteraction(event);
   });
   world.beforeEvents.entityItemPickup.subscribe((event) => {
-    if (event.entity.typeId !== "minecraft:player") return;
-    cancelIfNoInteractAccess(event, event.entity, event.item.dimension, event.item.location);
+    const player = event.entity;
+    if (!player || player.typeId !== "minecraft:player" || !isMoolahPlayer(player)) return;
+    cancelIfNoInteractAccess(event, player, event.item.dimension, event.item.location);
   });
   world.beforeEvents.entityHurt.subscribe((event) => {
     if (!getEconomySettings().allowClaims) return;
+    if (!event.hurtEntity) return;
+    if (
+      event.hurtEntity.typeId === "minecraft:player"
+      && !isMoolahPlayer(event.hurtEntity)
+    ) return;
     const claim = getClaimAt(event.hurtEntity.dimension, event.hurtEntity.location);
     if (!claim) return;
     if (simulatedCreeperDamageEntities.has(event.hurtEntity.id)) return;

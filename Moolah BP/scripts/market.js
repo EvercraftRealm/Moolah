@@ -11,6 +11,7 @@ import {
 } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
 import { addBalance, getBalance } from "./balance.js";
+import { getMoolahPlayers } from "./players.js";
 
 const LISTING_PROPERTY_PREFIX = "moolah:market:";
 const STORAGE_ENTITY_TYPE = "moolah:market_storage";
@@ -461,7 +462,7 @@ function purchaseListing(buyer, propertyId) {
   );
   writeAuditLog("market", "Listing Purchased", buyer, `${listing.amount}x ${listing.itemName} from ${listing.sellerName}; paid ${totalCost} Moolah (${taxAmount} tax).`);
 
-  const seller = world.getPlayers().find(
+  const seller = getMoolahPlayers().find(
     (player) => player.id === listing.sellerId,
   );
   seller?.sendMessage(

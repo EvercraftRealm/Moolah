@@ -240,7 +240,9 @@ Dedicated-server owners can grant additional admins from the server console with
 ## For world owners
 
 - This addon is achievement-friendly!
-- Minimum engine version: Minecraft Bedrock `1.26.10`
-- Script dependencies: `@minecraft/server` 2.6.0 and `@minecraft/server-ui` 2.0.0
+- Minimum engine version: Minecraft Bedrock `1.26.60`
+- Script dependencies: `@minecraft/server` 2.10.0 and `@minecraft/server-ui` 2.0.0
+- BedrockUnplugged ghosts tagged `unplugged.bot` are ignored by Moolah's
+  economy, menus, tax timers, market, warps, claims, and login setup.
 - Market items use persistent private storage entities and should not be removed with broad entity-cleanup commands.
 - Back up important worlds before updating or removing economy add-ons.

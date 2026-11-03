@@ -1,6 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { writeAuditLog } from "./audit.js";
 import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
+import { getMoolahPlayers } from "./players.js";
 
 const LAST_KNOWN_BALANCE_PROPERTY = "moolah:last_known_balance";
 const knownBalances = new Map();
@@ -133,7 +134,7 @@ function monitorExternalBalanceChanges() {
     return;
   }
 
-  for (const player of world.getPlayers()) {
+  for (const player of getMoolahPlayers()) {
     onlinePlayerIds.add(player.id);
 
     try {

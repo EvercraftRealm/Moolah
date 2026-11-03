@@ -3,6 +3,7 @@ import { MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { addToTaxPool, getEconomySettings } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
 import { addBalance, getBalance } from "./balance.js";
+import { getMoolahPlayers } from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
 const NETHER_COORDINATE_SCALE = 8;
@@ -224,7 +225,7 @@ export function openWarpMenu(player, onBack) {
     return;
   }
 
-  const targetPlayers = world.getPlayers().filter(
+  const targetPlayers = getMoolahPlayers().filter(
     (candidate) => candidate.id !== player.id,
   );
   const options = [
@@ -257,7 +258,7 @@ export function openWarpMenu(player, onBack) {
 
         if (selection < targetPlayers.length) {
           const selectedPlayerId = targetPlayers[selection]?.id;
-          const target = world.getPlayers().find(
+          const target = getMoolahPlayers().find(
             (candidate) => candidate.id === selectedPlayerId,
           );
 
