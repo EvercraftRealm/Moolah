@@ -56,6 +56,10 @@ import {
 import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
+const MOOLAH_VERSION = "1.2.7";
+const MINIMUM_MINECRAFT_VERSION = "1.26.60";
+const SERVER_API_VERSION = "2.10.0";
+const SERVER_UI_API_VERSION = "2.0.0";
 const BANK_OPEN_ITEM_TYPES = new Set([
   "minecraft:diamond",
   "moolah:moolah_pouch",
@@ -848,6 +852,13 @@ system.beforeEvents.startup.subscribe((event) => {
       system.run(() => openBrowseListings(player));
       return { status: CustomCommandStatus.Success };
     }),
+  );
+
+  console.log(
+    `[Moolah] v${MOOLAH_VERSION} initialized `
+      + `(Minecraft ${MINIMUM_MINECRAFT_VERSION}+, `
+      + `@minecraft/server ${SERVER_API_VERSION}, `
+      + `@minecraft/server-ui ${SERVER_UI_API_VERSION}).`,
   );
 });
 
