@@ -13,7 +13,7 @@
               "author": "Moolah",
               "title": "Moolah Guide",
               "pages": [
-                "§lWelcome to Moolah!§r\n\nMoolah stores real diamond value digitally.\n\n1 diamond = 100 Moolah\n\nOpen the main menu with §l/bank§r or Use a diamond.",
+                "§lWelcome to Moolah!§r\n\nMoolah stores real diamond value digitally.\n\n1 diamond = 100 Moolah\n\nOpen the menu with §l/bank§r, a diamond, or a Moolah Pouch.",
                 "§lDeposit§r\n\nTurn inventory diamonds into Moolah.\n\n§l/deposit§r opens the menu.\n§l/deposit 1-1728§r deposits that many.\n§l/deposit 0§r deposits all.",
                 "§lWithdraw§r\n\nTurn Moolah back into diamonds.\n\n§l/withdraw§r opens the menu. Use 1-1728 or 0 for All to open a confirmation showing the total and any tax.",
                 "§lTransfers§r\n\nUse §l/pay§r to send Moolah. Payments stay Pending until accepted, so senders may cancel them.\n\nUse §l/inbox§r and §l/pending§r for shortcuts.",

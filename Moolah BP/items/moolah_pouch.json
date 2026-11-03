@@ -1,0 +1,21 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:item": {
+    "description": {
+      "identifier": "moolah:moolah_pouch",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:display_name": {
+        "value": "Moolah Pouch"
+      },
+      "minecraft:icon": "moolah_pouch",
+      "minecraft:interact_button": true,
+      "minecraft:max_stack_size": 1,
+      "minecraft:hand_equipped": false,
+      "moolah:open_bank": {}
+    }
+  }
+}

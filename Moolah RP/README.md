@@ -28,7 +28,10 @@ If a short command is unavailable, use its namespaced version:
 
 Open the main menu by running `/bank`.
 
-Alternatively, hold a diamond and **Use** it (right-click or press your platform's interaction button).
+Alternatively, hold a diamond or a **Moolah Pouch** and **Use** it (right-click
+or press your platform's interaction button). The pouch is reusable and can be
+crafted with a Bundle plus an Ender Pearl, or with Leather, String, and an
+Ender Pearl. Both recipes are available automatically.
 
 
 The menu includes the following features when enabled by an economy admin.

@@ -56,6 +56,10 @@ import {
 import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
+const BANK_OPEN_ITEM_TYPES = new Set([
+  "minecraft:diamond",
+  "moolah:moolah_pouch",
+]);
 const FIRST_ADMIN_PROPERTY = "moolah:first_admin_assigned";
 const TAX_REFUND_TIME_PROPERTY = "moolah:tax_refund_time_ms";
 const LAST_DEATH_TAX_PROPERTY = "moolah:last_death_tax_ms";
@@ -353,10 +357,10 @@ function updateHeldDiamondBalances() {
 
     const inventory = getInventory(player);
     const heldItem = inventory?.getItem(player.selectedSlotIndex);
-    const isHoldingDiamond = heldItem?.typeId === "minecraft:diamond";
+    const isHoldingBankItem = BANK_OPEN_ITEM_TYPES.has(heldItem?.typeId);
     const claimMessageActive = isClaimActionbarActive(player);
 
-    if (isHoldingDiamond) {
+    if (isHoldingBankItem) {
       const refundTimer = settings.distributeTaxes
         ? ` | ${getTaxRefundTimerText(player, now)}`
         : "";
@@ -489,6 +493,13 @@ function playerCommand(callback) {
 
 system.beforeEvents.startup.subscribe((event) => {
   const commandRegistry = event.customCommandRegistry;
+
+  event.itemComponentRegistry.registerCustomComponent("moolah:open_bank", {
+    onUse({ source }) {
+      if (!isMoolahPlayer(source)) return;
+      system.run(() => openShop(source));
+    },
+  });
 
   registerClaimCommand(commandRegistry);
 

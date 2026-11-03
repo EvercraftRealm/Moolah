@@ -24,6 +24,7 @@ before installing or updating add-ons.
 ## Features
 
 - Diamond-backed balances and reversible deposits
+- Craftable Moolah Pouch for opening the bank from a dedicated reusable item
 - Escrowed online and offline player payments
 - QuickPay signs for convenient transfers
 - Detailed log system (Up to 512 recent entries) accessible by admins
