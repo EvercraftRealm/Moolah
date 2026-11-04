@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1 - 2026-11-04
+
+- Removed Spectator-mode players from Warp destinations and re-check their
+  game mode before teleporting.
+
 ## 1.3.0 - 2026-11-04
 
 - Added optional BedLog Framework integration that forwards every successful

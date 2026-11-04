@@ -1,4 +1,4 @@
-import { system, world } from "@minecraft/server";
+import { GameMode, system, world } from "@minecraft/server";
 import { MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { addToTaxPool, getEconomySettings } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
@@ -15,6 +15,14 @@ const emergencyWarpSessions = new Map();
 
 function goBack(onBack) {
   if (onBack) system.run(onBack);
+}
+
+function isAvailablePlayerWarpTarget(player) {
+  try {
+    return player.getGameMode() !== GameMode.Spectator;
+  } catch {
+    return false;
+  }
 }
 
 function getWorldSpawnDestination() {
@@ -451,7 +459,10 @@ export function openWarpMenu(player, onBack) {
   }
 
   const targetPlayers = getMoolahPlayers().filter(
-    (candidate) => candidate.id !== player.id,
+    (candidate) => (
+      candidate.id !== player.id
+      && isAvailablePlayerWarpTarget(candidate)
+    ),
   );
   let showEmergencyWarp = false;
   if (settings.enableEmergencyWarp) {
@@ -507,6 +518,10 @@ export function openWarpMenu(player, onBack) {
 
           if (!target) {
             player.sendMessage("That player is no longer online.");
+            return;
+          }
+          if (!isAvailablePlayerWarpTarget(target)) {
+            player.sendMessage("That player is in Spectator mode and cannot be warped to.");
             return;
           }
 

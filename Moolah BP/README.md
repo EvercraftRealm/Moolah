@@ -88,7 +88,7 @@ Mail may have a postage cost configured by an economy admin. The cost is shown b
 
 ### Warp
 
-When enabled by an economy admin, choose **Warp** as the final option in the main menu or run `/warp`. You can warp to another online player, world spawn, or your Home spawn point. Home falls back to world spawn when no personal spawn point is available.
+When enabled by an economy admin, choose **Warp** as the final option in the main menu or run `/warp`. You can warp to another online player, world spawn, or your Home spawn point. Players in Spectator mode are not available as destinations. Home falls back to world spawn when no personal spawn point is available.
 
 Admins can optionally enable **Emergency Warp**. It is always the first, red destination and sends a player to world spawn for free after a 30-second countdown. Moving more than about one block, jumping, taking damage, changing dimensions, disconnecting, or an admin disabling the feature cancels the attempt. A successful Emergency Warp has an eight-hour per-player cooldown; cancelled and failed attempts do not use it.
 
