@@ -257,7 +257,7 @@ function openEmergencyWarpWarning(player, onBack) {
     .body(
       "Emergency Warp is free and sends you to Spawn after 30 seconds.\n\n"
       + "Do not move more than one block, jump, or take any damage during the countdown. "
-      + "Doing so cancels the warp without using your eight-hour cooldown.",
+      + "Doing any of these cancels the warp.",
     )
     .button1("Start Emergency Warp")
     .button2("Back");
@@ -453,8 +453,16 @@ export function openWarpMenu(player, onBack) {
   const targetPlayers = getMoolahPlayers().filter(
     (candidate) => candidate.id !== player.id,
   );
+  let showEmergencyWarp = false;
+  if (settings.enableEmergencyWarp) {
+    try {
+      showEmergencyWarp = getEmergencyWarpCooldownRemaining(player) <= 0;
+    } catch (error) {
+      console.error(`[Moolah] Emergency Warp cooldown check failed: ${error?.stack ?? error}`);
+    }
+  }
   const options = [
-    ...(settings.enableEmergencyWarp ? ["§cEmergency Warp§r"] : []),
+    ...(showEmergencyWarp ? ["§cEmergency Warp§r"] : []),
     ...targetPlayers.map((candidate) => candidate.name),
     "Spawn",
     "Home",
@@ -480,7 +488,7 @@ export function openWarpMenu(player, onBack) {
 
     system.run(() => {
       try {
-        if (settings.enableEmergencyWarp && selection === 0) {
+        if (showEmergencyWarp && selection === 0) {
           openEmergencyWarpWarning(
             player,
             () => openWarpMenu(player, onBack),
@@ -488,7 +496,7 @@ export function openWarpMenu(player, onBack) {
           return;
         }
 
-        const destinationSelection = selection - (settings.enableEmergencyWarp ? 1 : 0);
+        const destinationSelection = selection - (showEmergencyWarp ? 1 : 0);
         let destination;
 
         if (destinationSelection < targetPlayers.length) {
