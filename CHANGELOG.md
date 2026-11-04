@@ -1,44 +1,28 @@
 # Changelog
 
-## 1.2.7 - 2026-11-03
+## 1.3.0 - 2026-11-04
 
-- Added the **Moolah Pouch**, a reusable item that shows the player's balance
-  while held and opens the Moolah menu when used.
-- Added an automatically unlocked shapeless recipe using a Bundle and an Ender
-  Pearl.
-- Added a vanilla-style bundle texture with a Minecoin emblem on the front.
-
-## 1.2.6 - 2026-11-03
-
-- Added BedrockUnplugged compatibility by safely ignoring unreadable players
-  and entities tagged `unplugged.bot` across Moolah systems.
-- Deferred first-spawn handling by one tick so Unplugged can identify its
-  ghosts before Moolah assigns an admin, guide, or login notifications.
-- Raised the minimum supported Minecraft Bedrock version to 1.26.60 and the
-  `@minecraft/server` dependency to 2.10.0.
-
-## 1.2.5 - 2026-11-01
-
-- Added **Accept All Payments** at the top of the Inbox whenever payments are
-  ready, with one private summary grouped by sender.
-- Bulk payment claims leave mail untouched so recipients can still open and
-  read each message normally.
-
-## 1.2.4 - 2026-10-28
-
-- Warmed the unclaimed claim-border tint to counter the particle's blue bias
-  and render closer to neutral white in-game.
-- Moved Inbox and Pending notices to the top of the main menu when visible and
-  added dedicated icons for both actions.
-- Added an off-by-default **Send External Charges to Tax Pool** policy that
-  detects outside scoreboard deductions, transfers them to the Tax Pool, and
-  records each successful collection in the Admin & Tax log.
-- Allowed unnamed undead mobs such as zombie horses to take normal fire damage
-  inside fire-protected claims, even when they are not classified as hostile.
-- Fixed balance-monitor warnings on new worlds where a player does not yet have
-  a participant entry in the `moolah` scoreboard.
 - Added optional BedLog Framework integration that forwards every successful
   Moolah audit action through `blf:log` while retaining the built-in logs.
+- Added **Accept All Payments** to the Inbox with a private summary grouped by
+  sender. Mail remains available to read after its attached payment is claimed.
+- Added BedrockUnplugged compatibility by ignoring unreadable players and
+  `unplugged.bot` ghosts throughout Moolah.
+- Added the craftable **Moolah Pouch**, a reusable Bundle-and-Ender-Pearl item
+  that shows the player's balance while held and opens the Moolah menu when used.
+- Added optional **Emergency Warp**, a free 30-second escape to world spawn with
+  movement, jump, and damage cancellation plus an eight-hour successful-use cooldown.
+- Added an off-by-default **Send External Charges to Tax Pool** policy with
+  Admin & Tax logging for outside scoreboard deductions.
+- Prioritized Inbox and Pending notices at the top of the main menu and added
+  dedicated icons for both actions.
+- Added one informational startup Content Log entry with the Moolah, Minecraft,
+  and Script API versions.
+- Fixed new-world balance-monitor warnings before a player has a scoreboard
+  participant, improved undead fire behavior in protected claims, and adjusted
+  unclaimed claim borders closer to neutral white.
+- Raised the minimum supported Minecraft Bedrock version to 1.26.60 and the
+  `@minecraft/server` dependency to 2.10.0.
 
 ## 1.2.1 - 2026-10-15
 

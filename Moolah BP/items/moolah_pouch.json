@@ -4,7 +4,7 @@
     "description": {
       "identifier": "moolah:moolah_pouch",
       "menu_category": {
-        "category": "items"
+        "category": "equipment"
       }
     },
     "components": {
