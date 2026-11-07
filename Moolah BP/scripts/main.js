@@ -53,10 +53,14 @@ import {
   getBalance,
   initializeBalanceMonitor,
 } from "./balance.js";
-import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
+import {
+  getMoolahPlayers,
+  getMoolahPlayerSnapshot,
+  isMoolahPlayer,
+} from "./players.js";
 
 const MINECOIN_GLYPH = "\uE102";
-const MOOLAH_VERSION = "1.3.1";
+const MOOLAH_VERSION = "1.3.2";
 const MINIMUM_MINECRAFT_VERSION = "1.26.60";
 const SERVER_API_VERSION = "2.10.0";
 const SERVER_UI_API_VERSION = "2.0.0";
@@ -73,6 +77,7 @@ const TAX_REFUND_AFK_MS = 5 * 60 * 1000;
 const CAMERA_ACTIVITY_EPSILON = 0.1;
 const BANK_ICON_ROOT = "textures/ui/moolah";
 const playersShowingBalance = new Set();
+const heldBalanceWarnings = new Set();
 const taxRefundSessions = new Map();
 
 initializeClaimSystem();
@@ -299,10 +304,12 @@ function updateTaxRefundTimers() {
   const onlinePlayerIds = new Set();
 
   for (const player of getMoolahPlayers()) {
-    onlinePlayerIds.add(player.id);
+    const identity = getMoolahPlayerSnapshot(player);
+    if (!identity) continue;
+    onlinePlayerIds.add(identity.id);
 
     try {
-      let session = taxRefundSessions.get(player.id);
+      let session = taxRefundSessions.get(identity.id);
 
       if (!session) {
         session = {
@@ -311,7 +318,7 @@ function updateTaxRefundTimers() {
           lastCameraActivity: now,
           rotation: player.getRotation(),
         };
-        taxRefundSessions.set(player.id, session);
+        taxRefundSessions.set(identity.id, session);
       }
 
       const rotation = player.getRotation();
@@ -341,7 +348,7 @@ function updateTaxRefundTimers() {
       player.setDynamicProperty(TAX_REFUND_TIME_PROPERTY, session.elapsed);
     } catch (error) {
       console.error(
-        `[Moolah] Could not update Tax Refund time for ${player.name}: ${error?.stack ?? error}`,
+        `[Moolah] Could not update Tax Refund time for ${identity.name}: ${error?.stack ?? error}`,
       );
     }
   }
@@ -357,36 +364,50 @@ function updateHeldDiamondBalances() {
   const settings = getEconomySettings();
 
   for (const player of getMoolahPlayers()) {
-    onlinePlayerIds.add(player.id);
+    const identity = getMoolahPlayerSnapshot(player);
+    if (!identity) continue;
+    onlinePlayerIds.add(identity.id);
 
-    const inventory = getInventory(player);
-    const heldItem = inventory?.getItem(player.selectedSlotIndex);
-    const isHoldingBankItem = BANK_OPEN_ITEM_TYPES.has(heldItem?.typeId);
-    const claimMessageActive = isClaimActionbarActive(player);
-    const emergencyWarpActive = isEmergencyWarpActive(player);
+    try {
+      const inventory = getInventory(player);
+      const heldItem = inventory?.getItem(player.selectedSlotIndex);
+      const isHoldingBankItem = BANK_OPEN_ITEM_TYPES.has(heldItem?.typeId);
+      const claimMessageActive = isClaimActionbarActive(player);
+      const emergencyWarpActive = isEmergencyWarpActive(player);
 
-    if (isHoldingBankItem) {
-      const refundTimer = settings.distributeTaxes
-        ? ` | ${getTaxRefundTimerText(player, now)}`
-        : "";
-      if (!claimMessageActive && !emergencyWarpActive) {
-        player.onScreenDisplay.setActionBar(
-          `Balance: \uE102${getBalance(player)}${refundTimer}`,
+      if (isHoldingBankItem) {
+        const refundTimer = settings.distributeTaxes
+          ? ` | ${getTaxRefundTimerText(player, now)}`
+          : "";
+        if (!claimMessageActive && !emergencyWarpActive) {
+          player.onScreenDisplay.setActionBar(
+            `Balance: \uE102${getBalance(player)}${refundTimer}`,
+          );
+        }
+        playersShowingBalance.add(identity.id);
+      } else if (
+        playersShowingBalance.delete(identity.id)
+        && !claimMessageActive
+        && !emergencyWarpActive
+      ) {
+        player.onScreenDisplay.setActionBar("");
+      }
+      heldBalanceWarnings.delete(identity.id);
+    } catch (error) {
+      playersShowingBalance.delete(identity.id);
+      if (!heldBalanceWarnings.has(identity.id)) {
+        heldBalanceWarnings.add(identity.id);
+        console.warn(
+          `[Moolah] Could not update the held balance for ${identity.name}: ${error?.stack ?? error}`,
         );
       }
-      playersShowingBalance.add(player.id);
-    } else if (
-      playersShowingBalance.delete(player.id)
-      && !claimMessageActive
-      && !emergencyWarpActive
-    ) {
-      player.onScreenDisplay.setActionBar("");
     }
   }
 
   for (const playerId of playersShowingBalance) {
     if (!onlinePlayerIds.has(playerId)) {
       playersShowingBalance.delete(playerId);
+      heldBalanceWarnings.delete(playerId);
     }
   }
 }
@@ -927,6 +948,12 @@ world.afterEvents.playerSpawn.subscribe((event) => {
       if (isMoolahPlayer(player)) sendLoginNotifications(player);
     }, 19);
   });
+});
+
+world.afterEvents.playerLeave.subscribe((event) => {
+  taxRefundSessions.delete(event.playerId);
+  playersShowingBalance.delete(event.playerId);
+  heldBalanceWarnings.delete(event.playerId);
 });
 
 system.runInterval(updateHeldDiamondBalances, 5);

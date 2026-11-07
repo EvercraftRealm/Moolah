@@ -562,4 +562,8 @@ world.afterEvents.entityHurt.subscribe((event) => {
   cancelEmergencyWarp(player, "you took damage");
 });
 
+world.afterEvents.playerLeave.subscribe((event) => {
+  emergencyWarpSessions.delete(event.playerId);
+});
+
 system.runInterval(updateEmergencyWarps, 1);

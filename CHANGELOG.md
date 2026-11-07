@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.2 - 2026-11-07
+
+- Hardened recurring player polling against players departing through scripted
+  kicks, including balance, HUD, tax-return, claim, and Emergency Warp state.
+- Changed external balance monitoring from every tick to once per second and
+  skipped player/scoreboard polling while external-charge collection is off.
+- Added before-leave exclusion and after-leave cache cleanup without retaining
+  or re-reading an invalid Player object in error paths.
+
 ## 1.3.1 - 2026-11-04
 
 - Removed Spectator-mode players from Warp destinations and re-check their

@@ -2518,6 +2518,15 @@ export function initializeClaimSystem() {
     event.setImpactedBlocks(allowedBlocks);
   });
 
+  world.afterEvents.playerLeave.subscribe((event) => {
+    walkSessions.delete(event.playerId);
+    claimViewPlayers.delete(event.playerId);
+    lastPlayerClaimStates.delete(event.playerId);
+    claimActionbarUntil.delete(event.playerId);
+    denialCooldowns.delete(event.playerId);
+    ownerKeyCache.delete(event.playerId);
+  });
+
   system.runInterval(updateWalkSessions, 2);
   system.runInterval(updateClaimViews, 20);
   system.runInterval(updateClaimEntryMessages, 10);
