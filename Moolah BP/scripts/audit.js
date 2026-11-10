@@ -19,6 +19,7 @@ const LOG_CATEGORIES = [
   ["market", "Market"],
   ["warp", "Warps"],
   ["claim", "Claims"],
+  ["chest_shop", "Chest Shops"],
   ["admin", "Admin & Tax"],
 ];
 const LOG_CATEGORY_LABELS = new Map(LOG_CATEGORIES);

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.3 - 2026-11-10 (Local Test)
+
+- Added off-by-default Chest Shops for chests, copper chests, double chests,
+  and barrels registered with a `!ChestShop` sign.
+- Added secure item browsing and purchase confirmation with native item icons,
+  per-item pricing and quantities, sales tax, registration fees, final sales,
+  seller Inbox proceeds, and dedicated audit logs.
+- Added owner shop configuration, automatic matching/default pricing, Unsold
+  stock, hopper-added stock reconciliation, claim access, and shop protection.
+- Removed BedrockUnplugged-specific player filtering and documentation.
+
 ## 1.3.2 - 2026-11-07
 
 - Hardened recurring player polling against players departing through scripted
@@ -20,8 +31,6 @@
   Moolah audit action through `blf:log` while retaining the built-in logs.
 - Added **Accept All Payments** to the Inbox with a private summary grouped by
   sender. Mail remains available to read after its attached payment is claimed.
-- Added BedrockUnplugged compatibility by ignoring unreadable players and
-  `unplugged.bot` ghosts throughout Moolah.
 - Added the craftable **Moolah Pouch**, a reusable Bundle-and-Ender-Pearl item
   that shows the player's balance while held and opens the Moolah menu when used.
 - Added optional **Emergency Warp**, a free 30-second escape to world spawn with

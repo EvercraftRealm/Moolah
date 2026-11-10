@@ -14,9 +14,12 @@ export const DEFAULT_ECONOMY_SETTINGS = Object.freeze({
   allowWarp: false,
   enableEmergencyWarp: false,
   allowClaims: false,
+  allowChestShops: false,
+  chargeChestShopRegistrationFee: false,
   transferTaxRate: 0,
   withdrawTaxRate: 10,
   marketTaxRate: 10,
+  chestShopTaxRate: 0,
   deathTax: 0,
   deathTaxCooldownMinutes: 60,
   maxTaxRefund: 100,
@@ -30,6 +33,7 @@ export const DEFAULT_ECONOMY_SETTINGS = Object.freeze({
   minWarpCost: undefined,
   maxWarpCost: undefined,
   claimCostPerChunk: 10,
+  chestShopRegistrationFee: 10,
   refundRemovedClaims: false,
   distributeTaxes: false,
   sendExternalChargesToTaxPool: false,
@@ -59,6 +63,8 @@ export function getEconomySettings() {
       "allowWarp",
       "enableEmergencyWarp",
       "allowClaims",
+      "allowChestShops",
+      "chargeChestShopRegistrationFee",
       "refundCanceledListingFees",
       "refundCanceledPostage",
       "refundRemovedClaims",
@@ -72,6 +78,7 @@ export function getEconomySettings() {
       "transferTaxRate",
       "withdrawTaxRate",
       "marketTaxRate",
+      "chestShopTaxRate",
     ]) {
       if (
         Number.isFinite(stored[key])
@@ -137,6 +144,13 @@ export function getEconomySettings() {
       && stored.claimCostPerChunk >= 0
     ) {
       settings.claimCostPerChunk = stored.claimCostPerChunk;
+    }
+
+    if (
+      Number.isSafeInteger(stored.chestShopRegistrationFee)
+      && stored.chestShopRegistrationFee >= 0
+    ) {
+      settings.chestShopRegistrationFee = stored.chestShopRegistrationFee;
     }
 
     if (

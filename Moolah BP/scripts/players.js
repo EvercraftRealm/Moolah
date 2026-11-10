@@ -1,13 +1,12 @@
 import { world } from "@minecraft/server";
 
-const UNPLUGGED_BOT_TAG = "unplugged.bot";
 const leavingPlayerIds = new Set();
 
 function readPlayerSnapshot(player) {
   try {
     if (!player?.isValid) return undefined;
     const id = player.id;
-    if (leavingPlayerIds.has(id) || player.hasTag(UNPLUGGED_BOT_TAG)) {
+    if (leavingPlayerIds.has(id)) {
       return undefined;
     }
     const name = player.name;

@@ -5,7 +5,7 @@ Bedrock multiplayer. It digitizes diamonds at a fixed rate of 100 moolah per
 diamond instead of creating a fiat currency.
 
 Players can deposit and withdraw diamonds, transfer funds, use QuickPay signs,
-send mail, trade native items through a market, optionally pay for warps, and
+run secure Chest Shops, send mail, trade native items through a market, optionally pay for warps, and
 protect purchased chunks with the opt-in claim system.
 World owners can configure taxes and other economy controls without enabling
 cheats.
@@ -29,7 +29,7 @@ before installing or updating add-ons.
 - QuickPay signs for convenient transfers
 - Detailed log system (Up to 512 recent entries) accessible by admins
 - Optional BedLog Framework forwarding for successful action logs
-- BedrockUnplugged ghost-player compatibility
+- Optional secure Chest Shops with item-based buyer menus
 - Configurable taxes and tax-return distribution
 - Optional mail system with offline-player support
 - Optional market system that preserves all native item data

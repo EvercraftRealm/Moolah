@@ -19,6 +19,7 @@
                 "§lTransfers§r\n\nUse §l/pay§r to send Moolah. Payments stay Pending until accepted, so senders may cancel them.\n\nUse §l/inbox§r and §l/pending§r for shortcuts.",
                 "§lMail§r\n\nUse §l/mail§r to message online or offline players. Postage may apply.\n\nOpening mail accepts it. The sender may cancel it only while it is still unopened.",
                 "§lQuickPay Signs§r\n\nLine 1: !QuickPay\nLine 2: USERNAME\nLine 3: AMOUNT\nLine 4: DESCRIPTION\n\nUse a registered sign to create a payment. Always verify its details.",
+                "§lChest Shops§r\n\nWhen enabled, put a sign beside a chest or barrel with only §l!ChestShop§r on line 1, then use it to register.\n\nOwners stock and price items. Buyers use the sign or container to shop safely.",
                 "§lMarket§r\n\nUse §l/market§r to browse or manage listings.\n\n§l/buy§r opens browsing.\n§l/sell§r lists your held item.\n\nFees and taxes may apply.",
                 "§lWarp§r\n\nWhen enabled, use §l/warp§r to travel to a player, Spawn, or Home.\n\nDistance and dimension affect price. You always see a confirmation first.",
                 "§lClaims§r\n\nWhen enabled, use §l/claim§r to protect chunks. Purchases fund the Tax Pool.\n\nFriends can build. Guests can interact and pick up items, but cannot edit or cause harm. Use the Claims menu to manage access.",

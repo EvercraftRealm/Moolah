@@ -29,6 +29,7 @@ export function openAdminMenu(player, onBack) {
     .button("General")
     .button("Tax Policy")
     .button("Market")
+    .button("Chest Shops")
     .button("Claims")
     .button("Warp")
     .button("Misc")
@@ -49,12 +50,14 @@ export function openAdminMenu(player, onBack) {
     } else if (response.selection === 2) {
       system.run(() => openMarketAdminMenu(player, returnToAdmin));
     } else if (response.selection === 3) {
-      system.run(() => openClaimsAdminMenu(player, returnToAdmin));
+      system.run(() => openChestShopAdminMenu(player, returnToAdmin));
     } else if (response.selection === 4) {
-      system.run(() => openWarpAdminMenu(player, returnToAdmin));
+      system.run(() => openClaimsAdminMenu(player, returnToAdmin));
     } else if (response.selection === 5) {
-      system.run(() => openMiscAdminMenu(player, returnToAdmin));
+      system.run(() => openWarpAdminMenu(player, returnToAdmin));
     } else if (response.selection === 6) {
+      system.run(() => openMiscAdminMenu(player, returnToAdmin));
+    } else if (response.selection === 7) {
       system.run(() => openAuditLogMenu(player, returnToAdmin));
     }
   }).catch(() => {
@@ -271,6 +274,70 @@ function openMarketAdminMenu(player, onBack) {
     goBack(onBack);
   }).catch(() => {
     player.sendMessage("The Market settings menu could not be opened.");
+  });
+}
+
+function openChestShopAdminMenu(player, onBack) {
+  if (!canConfigureEconomy(player, onBack)) return;
+
+  const settings = getEconomySettings();
+  const form = new ModalFormData()
+    .title("Chest Shops")
+    .toggle("Enable Chest Shops", { defaultValue: settings.allowChestShops })
+    .slider("Sales Tax Rate (percent)", 0, 100, {
+      defaultValue: settings.chestShopTaxRate,
+      valueStep: 1,
+    })
+    .toggle("Charge Registration Fee", {
+      defaultValue: settings.chargeChestShopRegistrationFee,
+    })
+    .textField("Single Container Fee (Moolah)", "0 or more", {
+      defaultValue: String(settings.chestShopRegistrationFee),
+    })
+    .label("Double chests cost twice the single-container fee. All fees and sales tax go to the Tax Pool.")
+    .submitButton("Save Chest Shop Settings");
+
+  form.show(player).then((response) => {
+    if (response.canceled) {
+      goBack(onBack);
+      return;
+    }
+    if (!response.formValues || !canConfigureEconomy(player, onBack)) return;
+
+    const [
+      allowChestShops,
+      chestShopTaxRate,
+      chargeChestShopRegistrationFee,
+      registrationFeeValue,
+    ] = response.formValues;
+    const registrationFeeText = typeof registrationFeeValue === "string"
+      ? registrationFeeValue.trim()
+      : "";
+    const chestShopRegistrationFee = Number(registrationFeeText);
+
+    if (
+      typeof allowChestShops !== "boolean"
+      || typeof chargeChestShopRegistrationFee !== "boolean"
+      || !Number.isFinite(chestShopTaxRate)
+      || chestShopTaxRate < 0
+      || chestShopTaxRate > 100
+      || !/^\d+$/.test(registrationFeeText)
+      || !Number.isSafeInteger(chestShopRegistrationFee)
+    ) {
+      player.sendMessage("The Chest Shop settings were invalid.");
+      return;
+    }
+
+    saveAdminSettings(player, "Chest Shops", {
+      allowChestShops,
+      chestShopTaxRate,
+      chargeChestShopRegistrationFee,
+      chestShopRegistrationFee,
+    });
+    player.sendMessage("Chest Shop settings saved.");
+    goBack(onBack);
+  }).catch(() => {
+    player.sendMessage("The Chest Shop settings menu could not be opened.");
   });
 }
 

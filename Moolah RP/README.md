@@ -146,6 +146,22 @@ Rules:
 
 QuickPay payments still have the standard 60-second Inbox delay, giving the sender time to review or cancel an accidental payment. Disabling transfers globally also disables QuickPay. Disabling Transfer Descriptions leaves description-free QuickPay signs working normally.
 
+## Chest Shops
+
+When enabled by an economy admin, place a sign directly beside a chest, copper
+chest, double chest, or barrel. Write `!ChestShop` as the first and only line,
+then use the sign to register it. A configured registration fee is shown for
+confirmation first; double chests cost twice the normal fee.
+
+Owners configure the shop name and optional default price and purchase
+quantity from the sign. Stock reuses matching prices, uses shop defaults, or
+is marked **Unsold** until priced. Hopper-added stock follows the same rules.
+Buyers browse stock in slot order with item icons, quantities, prices, and
+remaining stock. Purchases require confirmation and are non-refundable and
+nonreturnable. Seller proceeds go to the Inbox and sales tax enters the Tax
+Pool. Chest Shops remain accessible inside claims, while only the owner may
+break or stock the shop and its directly connected hoppers.
+
 ## Market
 
 Open the Market parent menu with `/market` or from the main menu. Use `/buy` to skip directly to Browse Listings.
@@ -190,7 +206,7 @@ The purchase confirmation shows the listing price, Market tax, and final total. 
 
 Only players with the `econ_admin` tag can access the **Admin** menu. On a new world, Moolah automatically grants this tag to the first player who joins, once for the lifetime of that world. This gives vanilla Realm owners access without enabling cheats.
 
-The Admin menu is organized into six categories:
+The Admin menu is organized into eight categories:
 
 - **General**
   - **Allow Deposit** — on by default
@@ -212,6 +228,11 @@ The Admin menu is organized into six categories:
   - **Max Market Listings** — 3 per player by default
   - **Listing Fee** — 10 moolah by default
   - **Refund Cancelled Listing Fees** — off by default
+- **Chest Shops**
+  - **Enable Chest Shops** — off by default
+  - **Sales Tax Rate** — 0% by default
+  - **Charge Registration Fee** — off by default
+  - **Single Container Fee** — 10 moolah by default; doubled for double chests
 - **Claims**
   - **Allow Claims** — off by default; also controls `/claim`
   - **Claim Cost per Chunk** — 10 moolah by default
@@ -226,6 +247,8 @@ The Admin menu is organized into six categories:
   - **Interdimensional Multiplier** — 2x by default; configurable from 1x to 5x
   - **Minimum Warp Cost** — blank and without a minimum by default
   - **Max Warp Cost** — blank and uncapped by default
+- **Logs**
+  - Separate logs include Chest Shop registrations and purchases
 
 Successful economy actions are also forwarded to the optional BedLog Framework using source **Moolah** when BedLog is installed. Moolah's built-in logs remain available independently.
 
@@ -245,7 +268,5 @@ Dedicated-server owners can grant additional admins from the server console with
 - This addon is achievement-friendly!
 - Minimum engine version: Minecraft Bedrock `1.26.60`
 - Script dependencies: `@minecraft/server` 2.10.0 and `@minecraft/server-ui` 2.0.0
-- BedrockUnplugged ghosts tagged `unplugged.bot` are ignored by Moolah's
-  economy, menus, tax timers, market, warps, claims, and login setup.
 - Market items use persistent private storage entities and should not be removed with broad entity-cleanup commands.
 - Back up important worlds before updating or removing economy add-ons.

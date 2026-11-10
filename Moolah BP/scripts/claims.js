@@ -12,6 +12,7 @@ import {
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 import { getEconomySettings, getTaxPool, setTaxPool } from "./settings.js";
 import { writeAuditLog } from "./audit.js";
+import { isChestShopPublicInteractionBlock } from "./chestshops.js";
 import { addBalance, getBalance, setBalance } from "./balance.js";
 import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 
@@ -2407,6 +2408,7 @@ export function initializeClaimSystem() {
   });
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
     if (!isMoolahPlayer(event.player)) return;
+    if (isChestShopPublicInteractionBlock(event.block)) return;
     const claim = getClaimAt(event.block.dimension, event.block.location);
     if (claim && hasGuestAccess(event.player, claim) && !hasEditAccess(event.player, claim)) {
       cancelGuestBlockInteraction(event);
