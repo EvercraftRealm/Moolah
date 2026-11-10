@@ -105,8 +105,9 @@ function unindexShop(shop) {
 
 function loadShops() {
   if (shopsLoaded) return;
+  const propertyIds = world.getDynamicPropertyIds();
   shopsLoaded = true;
-  for (const propertyId of world.getDynamicPropertyIds()) {
+  for (const propertyId of propertyIds) {
     if (!propertyId.startsWith(SHOP_PROPERTY_PREFIX)) continue;
     const shop = parseShop(propertyId, world.getDynamicProperty(propertyId));
     if (shop) indexShop(shop);
@@ -952,7 +953,13 @@ export function isChestShopPublicInteractionBlock(block) {
 export function initializeChestShopSystem() {
   if (initialized) return;
   initialized = true;
-  loadShops();
+  system.run(() => {
+    try {
+      loadShops();
+    } catch (error) {
+      console.warn(`[Moolah Chest Shop] Could not load shops after startup: ${error?.stack ?? error}`);
+    }
+  });
 
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
     if (event.cancel || !event.isFirstEvent || !isMoolahPlayer(event.player)) return;
