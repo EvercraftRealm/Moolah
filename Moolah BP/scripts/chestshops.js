@@ -354,6 +354,109 @@ function getItemName(item) {
   return item.nameTag?.trim() || formatItemType(item.typeId);
 }
 
+function formatIdentifier(identifier) {
+  return String(identifier ?? "")
+    .replace(/^[^:]+:/, "")
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function romanNumeral(value) {
+  const numerals = [
+    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let remaining = Number(value);
+  let result = "";
+  if (!Number.isSafeInteger(remaining) || remaining <= 0 || remaining > 20) {
+    return String(value);
+  }
+  for (const [amount, numeral] of numerals) {
+    while (remaining >= amount) {
+      result += numeral;
+      remaining -= amount;
+    }
+  }
+  return result;
+}
+
+function cleanDisplayText(value) {
+  return String(value ?? "").replace(/§./g, "").replace(/[\r\n]+/g, " ").trim();
+}
+
+function getItemVariantDetails(item) {
+  const details = [];
+  try {
+    const potion = item.getComponent("minecraft:potion");
+    if (potion) {
+      const effect = formatIdentifier(potion.potionEffectType?.id);
+      const modifier = formatIdentifier(potion.potionModifierType?.id);
+      const liquid = formatIdentifier(potion.potionLiquidType?.id);
+      const potionText = [modifier, effect || liquid].filter(Boolean).join(" ");
+      if (potionText) details.push(potionText);
+    }
+  } catch {
+    // This item is not a readable potion.
+  }
+  try {
+    const enchantments = item.getComponent("minecraft:enchantable")
+      ?.getEnchantments()
+      ?.map((enchantment) => (
+        `${formatIdentifier(enchantment.type.id)} ${romanNumeral(enchantment.level)}`
+      ))
+      .sort();
+    if (enchantments?.length) details.push(enchantments.join(", "));
+  } catch {
+    // This item has no readable enchantments.
+  }
+  try {
+    const book = item.getComponent("minecraft:book");
+    if (book) {
+      const title = cleanDisplayText(book.title);
+      const author = cleanDisplayText(book.author);
+      if (title) details.push(author ? `“${title}” by ${author}` : `“${title}”`);
+      else if (book.pageCount > 0) details.push(`${book.pageCount} page${book.pageCount === 1 ? "" : "s"}`);
+    }
+  } catch {
+    // This item is not a readable book.
+  }
+  try {
+    const durability = item.getComponent("minecraft:durability");
+    if (durability?.maxDurability > 0) {
+      details.push(`${durability.maxDurability - durability.damage}/${durability.maxDurability} durability`);
+    }
+  } catch {
+    // This item has no durability.
+  }
+  if (item.nameTag?.trim()) details.push(formatItemType(item.typeId));
+  try {
+    const lore = item.getLore().map(cleanDisplayText).filter(Boolean);
+    if (lore.length) details.push(lore.slice(0, 2).join(" / "));
+  } catch {
+    // This item has no readable lore.
+  }
+  try {
+    const inventory = item.getComponent("minecraft:inventory")?.container;
+    if (inventory?.isValid) {
+      let occupied = 0;
+      for (let slot = 0; slot < inventory.size; slot++) {
+        if (inventory.getItem(slot)) occupied++;
+      }
+      if (occupied > 0) details.push(`${occupied}/${inventory.size} storage slots filled`);
+    }
+  } catch {
+    // This item does not contain inventory storage.
+  }
+  return details;
+}
+
+function compactItemVariant(item, maxLength = 52) {
+  const text = getItemVariantDetails(item).join(" • ");
+  if (!text) return "Standard item";
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
+}
+
 function getItemIconPath(item) {
   if (item.typeId === "moolah:moolah_pouch") return "textures/items/moolah_pouch";
   if (!item.typeId.startsWith("minecraft:")) return "textures/ui/moolah/market";
@@ -563,7 +666,11 @@ function promptListingSlots(player, shopId, slots, index) {
   }
   const form = new ModalFormData()
     .title(`List ${getItemName(item)}`)
-    .label(`${item.amount} item${item.amount === 1 ? "" : "s"} in this stack.`)
+    .label(
+      `Chest slot ${slot + 1}\n`
+      + `${item.amount} item${item.amount === 1 ? "" : "s"} in this stack.\n`
+      + (getItemVariantDetails(item).join("\n") || "Standard item"),
+    )
     .textField("Price (Moolah)", "Positive whole number", {
       defaultValue: listing.price ? String(listing.price) : (shop.defaultPrice ? String(shop.defaultPrice) : ""),
     })
@@ -851,7 +958,7 @@ function openChestShop(player, shopId) {
     const purchases = Math.floor(entry.item.amount / entry.listing.quantity);
     form.button(
       `${entry.listing.quantity}x ${getItemName(entry.item)} — ${MINECOIN_GLYPH}${formatAmount(entry.listing.price)}\n`
-        + `${entry.item.amount} in slot • ${purchases} purchase${purchases === 1 ? "" : "s"}`,
+        + `${compactItemVariant(entry.item)} • ${entry.item.amount} stock • ${purchases} purchase${purchases === 1 ? "" : "s"}`,
       getItemIconPath(entry.item),
     );
   }
