@@ -14,6 +14,12 @@ const SHOP_PROPERTY_PREFIX = "moolah:chest_shop:";
 const MINECOIN_GLYPH = "\uE102";
 const MAX_SHOP_NAME_LENGTH = 36;
 const MAX_DEFAULT_QUANTITY = 255;
+const VANILLA_ITEM_ICON_OVERRIDES = new Map([
+  ["minecraft:book", "textures/items/book_normal"],
+  ["minecraft:writable_book", "textures/items/book_writable"],
+  ["minecraft:written_book", "textures/items/book_written"],
+  ["minecraft:enchanted_book", "textures/items/book_enchanted"],
+]);
 const SHOP_NAME_COLORS = [
   { code: "§0", name: "black" },
   { code: "§1", name: "dark_blue" },
@@ -504,6 +510,8 @@ function playChestShopSound(player, soundId) {
 
 function getItemIconPath(item) {
   if (item.typeId === "moolah:moolah_pouch") return "textures/items/moolah_pouch";
+  const vanillaOverride = VANILLA_ITEM_ICON_OVERRIDES.get(item.typeId);
+  if (vanillaOverride) return vanillaOverride;
   if (!item.typeId.startsWith("minecraft:")) return "textures/ui/moolah/market";
   const textureName = item.typeId.slice("minecraft:".length);
   try {

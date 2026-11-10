@@ -27,6 +27,8 @@
   or confirmation window is closed.
 - Chest Shop owners can choose the color of their shop name from the full
   classic and material color set, with the color shown on signs and shop UI.
+- Fixed the Chest Shop icons for normal, writable, written, and enchanted
+  books by using their vanilla texture paths.
 - Removed BedrockUnplugged-specific player filtering and documentation.
 
 ## 1.3.2 - 2026-11-07
