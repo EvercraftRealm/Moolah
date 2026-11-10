@@ -9,6 +9,8 @@
   seller Inbox proceeds, and dedicated audit logs.
 - Added owner shop configuration, automatic matching/default pricing, Unsold
   stock, hopper-added stock reconciliation, claim access, and shop protection.
+- Stores Chest Shop pricing in server-side shop records so stock keeps its
+  original lore, stacking behavior, and other native item data unchanged.
 - Removed BedrockUnplugged-specific player filtering and documentation.
 
 ## 1.3.2 - 2026-11-07

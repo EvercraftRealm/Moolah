@@ -11,11 +11,7 @@ import {
 import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 
 const SHOP_PROPERTY_PREFIX = "moolah:chest_shop:";
-const ITEM_LISTING_PROPERTY = "moolah:chest_shop_listing";
 const MINECOIN_GLYPH = "\uE102";
-const PRICE_LORE_PREFIX = "§aPrice: ";
-const SHOP_LORE_PREFIX = "§5Shop: ";
-const UNSOLD_LORE = "§7Unsold";
 const MAX_SHOP_NAME_LENGTH = 36;
 const MAX_DEFAULT_QUANTITY = 255;
 const ADJACENT_OFFSETS = [
@@ -55,6 +51,39 @@ function shopPropertyId(shopId) {
   return `${SHOP_PROPERTY_PREFIX}${shopId}`;
 }
 
+function cleanStoredListings(value) {
+  const listings = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return listings;
+  for (const [slotText, listing] of Object.entries(value)) {
+    const slot = Number(slotText);
+    if (
+      !Number.isSafeInteger(slot)
+      || slot < 0
+      || slot >= 54
+      || typeof listing?.signature !== "string"
+      || listing.signature.length < 1
+      || listing.signature.length > 160
+      || typeof listing.unsold !== "boolean"
+      || (!listing.unsold && (
+        !Number.isSafeInteger(listing.price)
+        || listing.price <= 0
+        || !Number.isSafeInteger(listing.quantity)
+        || listing.quantity <= 0
+        || listing.quantity > MAX_DEFAULT_QUANTITY
+      ))
+    ) continue;
+    listings[slot] = listing.unsold
+      ? { signature: listing.signature, unsold: true }
+      : {
+        signature: listing.signature,
+        unsold: false,
+        price: listing.price,
+        quantity: listing.quantity,
+      };
+  }
+  return listings;
+}
+
 function parseShop(propertyId, raw) {
   if (typeof raw !== "string") return undefined;
   try {
@@ -81,6 +110,7 @@ function parseShop(propertyId, raw) {
       propertyId,
       signLocation: cleanLocation(shop.signLocation),
       containerLocations: shop.containerLocations.map(cleanLocation),
+      listings: cleanStoredListings(shop.listings),
     };
   } catch {
     return undefined;
@@ -315,122 +345,181 @@ function getItemIconPath(item) {
   }
 }
 
-function parseListingData(item) {
+function componentSnapshot(item, componentId, propertyNames) {
   try {
-    const raw = item?.getDynamicProperty(ITEM_LISTING_PROPERTY);
-    if (typeof raw !== "string") return undefined;
-    const listing = JSON.parse(raw);
-    if (
-      listing?.version !== 1
-      || typeof listing.shopId !== "string"
-      || typeof listing.shopName !== "string"
-      || typeof listing.unsold !== "boolean"
-      || !(listing.price === undefined || (Number.isSafeInteger(listing.price) && listing.price > 0))
-      || !(listing.quantity === undefined || (Number.isSafeInteger(listing.quantity) && listing.quantity > 0))
-    ) return undefined;
-    return listing;
+    const component = item.getComponent(componentId);
+    if (!component) return undefined;
+    const result = {};
+    for (const propertyName of propertyNames) {
+      try {
+        const value = component[propertyName];
+        if (value === undefined || typeof value === "function") continue;
+        result[propertyName] = value?.id ?? value;
+      } catch {
+        // Ignore component fields unavailable for this item.
+      }
+    }
+    return result;
   } catch {
     return undefined;
   }
 }
 
-function baseLore(item) {
-  return item.getLore().filter((line) => (
-    line !== UNSOLD_LORE
-    && !line.startsWith(PRICE_LORE_PREFIX)
-    && !line.startsWith(SHOP_LORE_PREFIX)
-  ));
-}
-
-function cleanShopItem(item) {
-  const clean = item.clone();
-  clean.setLore(baseLore(clean));
-  clean.setDynamicProperty(ITEM_LISTING_PROPERTY, undefined);
-  return clean;
-}
-
-function applyListing(item, shop, price, quantity) {
-  const listed = cleanShopItem(item);
-  const unsold = !Number.isSafeInteger(price) || !Number.isSafeInteger(quantity);
-  const lore = baseLore(listed).slice(0, 18);
-  if (unsold) {
-    lore.push(UNSOLD_LORE, `${SHOP_LORE_PREFIX}${shop.name}`);
-  } else {
-    lore.push(
-      `${PRICE_LORE_PREFIX}${MINECOIN_GLYPH}${formatAmount(price)} per ${quantity}`,
-      `${SHOP_LORE_PREFIX}${shop.name}`,
-    );
+function hashText(value, seed) {
+  let hash = seed >>> 0;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
   }
-  listed.setLore(lore.slice(0, 20));
-  listed.setDynamicProperty(ITEM_LISTING_PROPERTY, JSON.stringify({
-    version: 1,
-    shopId: shop.id,
-    shopName: shop.name,
-    unsold,
-    price: unsold ? undefined : price,
-    quantity: unsold ? undefined : quantity,
-  }));
-  return listed;
+  return hash.toString(16).padStart(8, "0");
+}
+
+function readItemValue(callback, fallback) {
+  try {
+    return callback();
+  } catch {
+    return fallback;
+  }
+}
+
+function itemSignature(item, depth = 0) {
+  try {
+    const dynamicProperties = {};
+    for (const propertyId of readItemValue(() => item.getDynamicPropertyIds(), [])) {
+      dynamicProperties[propertyId] = readItemValue(
+        () => item.getDynamicProperty(propertyId),
+        undefined,
+      );
+    }
+    const enchantments = [];
+    try {
+      for (const enchantment of item.getComponent("minecraft:enchantable")?.getEnchantments() ?? []) {
+        enchantments.push(`${enchantment.type.id}:${enchantment.level}`);
+      }
+      enchantments.sort();
+    } catch {
+      // The item has no readable enchantments.
+    }
+    const nestedItems = [];
+    if (depth < 2) {
+      try {
+        const nested = item.getComponent("minecraft:inventory")?.container;
+        if (nested?.isValid) {
+          for (let slot = 0; slot < nested.size; slot++) {
+            const child = nested.getItem(slot);
+            nestedItems.push(child ? itemSignature(child, depth + 1) : "");
+          }
+        }
+      } catch {
+        // Most items do not contain an inventory.
+      }
+    }
+    const details = JSON.stringify({
+      typeId: item.typeId,
+      nameTag: readItemValue(() => item.nameTag, "") ?? "",
+      lore: readItemValue(() => item.getLore(), []),
+      rawLore: readItemValue(() => item.getRawLore(), []),
+      canDestroy: readItemValue(() => item.getCanDestroy(), []),
+      canPlaceOn: readItemValue(() => item.getCanPlaceOn(), []),
+      keepOnDeath: readItemValue(() => item.keepOnDeath, false),
+      lockMode: readItemValue(() => item.lockMode, "none"),
+      weight: readItemValue(() => item.weight, 0),
+      dynamicProperties,
+      enchantments,
+      book: componentSnapshot(item, "minecraft:book", [
+        "author",
+        "contents",
+        "rawContents",
+        "isSigned",
+        "pageCount",
+        "title",
+      ]),
+      durability: componentSnapshot(item, "minecraft:durability", ["damage", "maxDurability"]),
+      dyeable: componentSnapshot(item, "minecraft:dyeable", ["color", "defaultColor"]),
+      map: componentSnapshot(item, "minecraft:map", ["mapId", "isLocked", "isExplorationMap"]),
+      potion: componentSnapshot(item, "minecraft:potion", [
+        "potionEffectType",
+        "potionLiquidType",
+        "potionModifierType",
+      ]),
+      nestedItems,
+    });
+    return `${item.typeId}|${hashText(details, 2166136261)}${hashText(details, 3339675911)}`;
+  } catch {
+    return `${item?.typeId ?? "unknown"}|unreadable`;
+  }
 }
 
 function sameBaseItem(left, right) {
   try {
-    const cleanLeft = cleanShopItem(left);
-    const cleanRight = cleanShopItem(right);
-    if (cleanLeft.typeId !== cleanRight.typeId) return false;
-    if (cleanLeft.isStackable && cleanRight.isStackable) {
-      return cleanLeft.isStackableWith(cleanRight);
-    }
-    return cleanLeft.typeId === cleanRight.typeId
-      && cleanLeft.nameTag === cleanRight.nameTag
-      && JSON.stringify(cleanLeft.getLore()) === JSON.stringify(cleanRight.getLore());
+    if (left.typeId !== right.typeId) return false;
+    if (left.isStackable && right.isStackable) return left.isStackableWith(right);
+    return itemSignature(left) === itemSignature(right);
   } catch {
     return false;
   }
 }
 
-function findMatchingPrice(container, item, shopId, excludedSlot) {
-  for (let slot = 0; slot < container.size; slot++) {
-    if (slot === excludedSlot) continue;
-    const candidate = container.getItem(slot);
-    const data = parseListingData(candidate);
-    if (
-      candidate
-      && data?.shopId === shopId
-      && !data.unsold
-      && sameBaseItem(candidate, item)
-    ) return { price: data.price, quantity: data.quantity };
+function listingFor(signature, price, quantity) {
+  if (!Number.isSafeInteger(price) || !Number.isSafeInteger(quantity)) {
+    return { signature, unsold: true };
   }
-  return undefined;
+  return { signature, unsold: false, price, quantity };
 }
 
 function normalizeShopItems(shop, promptOwner) {
   if (reconciliationLocks.has(shop.id)) return;
   const container = getShopContainer(shop);
   if (!container?.isValid) return;
+  const previousListings = cleanStoredListings(shop.listings);
+  const nextListings = {};
+  const usedPreviousSlots = new Set();
   const promptSlots = [];
+
   for (let slot = 0; slot < container.size; slot++) {
     const item = container.getItem(slot);
     if (!item) continue;
-    const data = parseListingData(item);
-    if (data?.shopId === shop.id) {
-      if (data.shopName !== shop.name) {
-        container.setItem(slot, applyListing(item, shop, data.price, data.quantity));
+    const signature = itemSignature(item);
+    let listing = previousListings[slot];
+    let reusedMatchingPrice = false;
+
+    if (listing?.signature === signature) {
+      usedPreviousSlots.add(String(slot));
+    } else {
+      listing = undefined;
+      for (const [previousSlot, candidate] of Object.entries(previousListings)) {
+        if (usedPreviousSlots.has(previousSlot) || candidate.signature !== signature) continue;
+        listing = candidate;
+        usedPreviousSlots.add(previousSlot);
+        break;
       }
-      if (data.unsold && promptOwner) promptSlots.push(slot);
-      continue;
     }
-    const matching = findMatchingPrice(container, item, shop.id, slot);
-    const fallback = matching ?? (
-      shop.defaultPrice && shop.defaultQuantity
-        ? { price: shop.defaultPrice, quantity: shop.defaultQuantity }
-        : undefined
-    );
-    container.setItem(
-      slot,
-      applyListing(item, shop, fallback?.price, fallback?.quantity),
-    );
-    if (promptOwner && !matching) promptSlots.push(slot);
+
+    if (!listing) {
+      for (const [pricedSlot, candidate] of Object.entries(nextListings)) {
+        if (candidate.unsold) continue;
+        const pricedItem = container.getItem(Number(pricedSlot));
+        if (pricedItem && sameBaseItem(pricedItem, item)) {
+          listing = listingFor(signature, candidate.price, candidate.quantity);
+          reusedMatchingPrice = true;
+          break;
+        }
+      }
+    }
+
+    if (!listing) {
+      listing = listingFor(signature, shop.defaultPrice, shop.defaultQuantity);
+      if (promptOwner) promptSlots.push(slot);
+    } else if (listing.unsold && promptOwner) {
+      promptSlots.push(slot);
+    }
+    nextListings[slot] = { ...listing, signature };
+    if (reusedMatchingPrice) nextListings[slot].unsold = false;
+  }
+
+  if (JSON.stringify(previousListings) !== JSON.stringify(nextListings)) {
+    shop = { ...shop, listings: nextListings };
+    saveShop(shop);
   }
   if (promptOwner && promptSlots.length > 0) {
     const owner = getMoolahPlayers().find((player) => player.id === shop.ownerId);
@@ -444,8 +533,9 @@ function promptListingSlots(player, shopId, slots, index) {
   if (!shop || !container?.isValid || index >= slots.length || player.id !== shop.ownerId) return;
   const slot = slots[index];
   const item = container.getItem(slot);
-  const data = parseListingData(item);
-  if (!item || data?.shopId !== shop.id) {
+  const listing = shop.listings?.[slot];
+  const signature = item && itemSignature(item);
+  if (!item || !listing || listing.signature !== signature) {
     promptListingSlots(player, shopId, slots, index + 1);
     return;
   }
@@ -453,10 +543,10 @@ function promptListingSlots(player, shopId, slots, index) {
     .title(`List ${getItemName(item)}`)
     .label(`${item.amount} item${item.amount === 1 ? "" : "s"} in this stack.`)
     .textField("Price (Moolah)", "Positive whole number", {
-      defaultValue: data.price ? String(data.price) : (shop.defaultPrice ? String(shop.defaultPrice) : ""),
+      defaultValue: listing.price ? String(listing.price) : (shop.defaultPrice ? String(shop.defaultPrice) : ""),
     })
     .textField("Quantity per Purchase", "1 or more", {
-      defaultValue: data.quantity ? String(data.quantity) : (shop.defaultQuantity ? String(shop.defaultQuantity) : "1"),
+      defaultValue: listing.quantity ? String(listing.quantity) : (shop.defaultQuantity ? String(shop.defaultQuantity) : "1"),
     })
     .submitButton("List Item");
   reconciliationLocks.add(shop.id);
@@ -467,8 +557,10 @@ function promptListingSlots(player, shopId, slots, index) {
       const quantityText = typeof response.formValues[2] === "string" ? response.formValues[2].trim() : "";
       const price = Number(priceText);
       const quantity = Number(quantityText);
-      const current = container.getItem(slot);
-      const currentData = parseListingData(current);
+      const currentShop = shopsById.get(shopId);
+      const currentContainer = currentShop && getShopContainer(currentShop);
+      const current = currentContainer?.getItem(slot);
+      const currentSignature = current && itemSignature(current);
       if (
         /^\d+$/.test(priceText)
         && /^\d+$/.test(quantityText)
@@ -477,12 +569,19 @@ function promptListingSlots(player, shopId, slots, index) {
         && Number.isSafeInteger(quantity)
         && quantity > 0
         && quantity <= MAX_DEFAULT_QUANTITY
+        && currentShop
         && current
-        && currentData?.shopId === shop.id
+        && currentShop.listings?.[slot]?.signature === currentSignature
       ) {
-        container.setItem(slot, applyListing(current, shop, price, quantity));
+        saveShop({
+          ...currentShop,
+          listings: {
+            ...currentShop.listings,
+            [slot]: listingFor(currentSignature, price, quantity),
+          },
+        });
       } else if (!response.canceled) {
-        player.sendMessage("The item remains Unsold because its price or quantity was invalid.");
+        player.sendMessage("The item remains Unsold because its price, quantity, or slot changed.");
       }
     }
     system.run(() => promptListingSlots(player, shopId, slots, index + 1));
@@ -522,6 +621,7 @@ function openShopConfig(player, shopId) {
     if (
       !name
       || name.length > MAX_SHOP_NAME_LENGTH
+      || /[\r\n§]/.test(name)
       || (hasDefaults && (
         !/^\d+$/.test(priceText)
         || !/^\d+$/.test(quantityText)
@@ -559,7 +659,7 @@ function restoreInventory(container, snapshot) {
   for (let slot = 0; slot < snapshot.length; slot++) container.setItem(slot, snapshot[slot]);
 }
 
-function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity) {
+function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity, expectedSignature) {
   if (transactionLocks.has(shopId)) {
     buyer.sendMessage("That Chest Shop is busy. Try again.");
     return;
@@ -574,13 +674,16 @@ function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity) {
     const buyerInventory = buyer.getComponent("minecraft:inventory")?.container;
     if (!container?.isValid || !buyerInventory?.isValid) throw new Error("The shop or your inventory is unavailable.");
     const stock = container.getItem(slot);
-    const listing = parseListingData(stock);
+    const listing = shop.listings?.[slot];
+    const currentSignature = stock && itemSignature(stock);
     if (
       !stock
-      || listing?.shopId !== shop.id
+      || !listing
       || listing.unsold
       || listing.price !== expectedPrice
       || listing.quantity !== expectedQuantity
+      || listing.signature !== expectedSignature
+      || currentSignature !== listing.signature
       || stock.amount < listing.quantity
     ) throw new Error("That stock changed before the purchase completed.");
     const tax = calculateTax(listing.price, settings.chestShopTaxRate);
@@ -590,12 +693,17 @@ function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity) {
 
     const buyerSnapshot = snapshotInventory(buyerInventory);
     const stockSnapshot = stock.clone();
-    const delivery = cleanShopItem(stock);
+    const delivery = stock.clone();
     delivery.amount = listing.quantity;
     addBalance(buyer, -total);
+    let shopMetadataChanged = false;
     try {
       if (stock.amount === listing.quantity) {
         container.setItem(slot);
+        const nextListings = { ...shop.listings };
+        delete nextListings[slot];
+        saveShop({ ...shop, listings: nextListings });
+        shopMetadataChanged = true;
       } else {
         stock.amount -= listing.quantity;
         container.setItem(slot, stock);
@@ -620,6 +728,13 @@ function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity) {
         restoreInventory(buyerInventory, buyerSnapshot);
       } catch {
         rollbackFailed = true;
+      }
+      if (shopMetadataChanged) {
+        try {
+          saveShop(shop);
+        } catch {
+          rollbackFailed = true;
+        }
       }
       try {
         addBalance(buyer, total);
@@ -664,18 +779,30 @@ function confirmPurchase(player, shopId, slot, listing, item) {
     .button2("Cancel");
   form.show(player).then((response) => {
     if (!response.canceled && response.selection === 0) {
-      system.run(() => buyListing(player, shopId, slot, listing.price, listing.quantity));
+      system.run(() => buyListing(
+        player,
+        shopId,
+        slot,
+        listing.price,
+        listing.quantity,
+        listing.signature,
+      ));
     }
   }).catch(() => player.sendMessage("The purchase confirmation could not be opened."));
 }
 
 function openChestShop(player, shopId) {
-  const shop = shopsById.get(shopId);
+  let shop = shopsById.get(shopId);
   if (!shop || !getEconomySettings().allowChestShops) {
     player.sendMessage("Chest Shops are currently disabled.");
     return;
   }
   normalizeShopItems(shop, false);
+  shop = shopsById.get(shopId);
+  if (!shop) {
+    player.sendMessage("That Chest Shop is no longer available.");
+    return;
+  }
   const container = getShopContainer(shop);
   if (!container?.isValid) {
     player.sendMessage("That Chest Shop is unavailable.");
@@ -684,8 +811,14 @@ function openChestShop(player, shopId) {
   const listings = [];
   for (let slot = 0; slot < container.size; slot++) {
     const item = container.getItem(slot);
-    const listing = parseListingData(item);
-    if (item && listing?.shopId === shop.id && !listing.unsold && item.amount >= listing.quantity) {
+    const listing = shop.listings?.[slot];
+    if (
+      item
+      && listing
+      && listing.signature === itemSignature(item)
+      && !listing.unsold
+      && item.amount >= listing.quantity
+    ) {
       listings.push({ slot, item, listing });
     }
   }
@@ -760,6 +893,7 @@ function registerShop(player, signBlock, attached, fee) {
     name: `${player.name}'s Shop`.slice(0, MAX_SHOP_NAME_LENGTH),
     defaultPrice: undefined,
     defaultQuantity: undefined,
+    listings: {},
     registeredAt: Date.now(),
   };
   if (fee > 0) addBalance(player, -fee);
@@ -826,19 +960,6 @@ function beginRegistration(player, signBlock) {
 }
 
 function removeShop(shop, actor) {
-  try {
-    const container = getShopContainer(shop);
-    if (container?.isValid) {
-      for (let slot = 0; slot < container.size; slot++) {
-        const item = container.getItem(slot);
-        if (item && parseListingData(item)?.shopId === shop.id) {
-          container.setItem(slot, cleanShopItem(item));
-        }
-      }
-    }
-  } catch {
-    // Spawned drops and player inventory events also remove shop metadata.
-  }
   deleteShop(shop);
   writeAuditLog("chest_shop", "Chest Shop Removed", actor, `${shop.name}; owner ${shop.ownerName}.`);
 }
@@ -889,46 +1010,6 @@ function findShopAdjacentToLocation(dimensionId, location) {
     ))) return shop;
   }
   return undefined;
-}
-
-function stripShopMetadataFromPlayerSlot(event) {
-  try {
-    const inventory = event.player.getComponent("minecraft:inventory")?.container;
-    if (!inventory?.isValid || event.slot < 0 || event.slot >= inventory.size) return;
-    const current = inventory.getItem(event.slot);
-    if (current && parseListingData(current)) {
-      inventory.setItem(event.slot, cleanShopItem(current));
-    }
-  } catch {
-    // A later inventory change can retry safely.
-  }
-}
-
-function sanitizePlayerInventory(player) {
-  try {
-    const inventory = player.getComponent("minecraft:inventory")?.container;
-    if (!inventory?.isValid) return;
-    for (let slot = 0; slot < inventory.size; slot++) {
-      const item = inventory.getItem(slot);
-      if (item && parseListingData(item)) inventory.setItem(slot, cleanShopItem(item));
-    }
-  } catch {
-    // The player may still be initializing or departing.
-  }
-}
-
-function stripShopMetadataFromItemEntity(entity) {
-  try {
-    const component = entity.getComponent("minecraft:item");
-    const item = component?.itemStack;
-    if (!item || !parseListingData(item)) return;
-    const location = { ...entity.location };
-    const dimension = entity.dimension;
-    entity.remove();
-    dimension.spawnItem(cleanShopItem(item), location);
-  } catch {
-    // The item may have been collected before it could be sanitized.
-  }
 }
 
 function reconcileLoadedShops() {
@@ -1041,20 +1122,6 @@ export function initializeChestShopSystem() {
     const player = event.closeSource?.entity;
     if (!shop || player?.typeId !== "minecraft:player" || player.id !== shop.ownerId) return;
     system.run(() => normalizeShopItems(shop, true));
-  });
-
-  world.afterEvents.playerInventoryItemChange.subscribe((event) => {
-    if (parseListingData(event.itemStack)) system.run(() => stripShopMetadataFromPlayerSlot(event));
-  });
-
-  world.afterEvents.entitySpawn.subscribe((event) => {
-    if (event.entity.typeId === "minecraft:item") {
-      system.run(() => stripShopMetadataFromItemEntity(event.entity));
-    }
-  });
-
-  world.afterEvents.playerSpawn.subscribe((event) => {
-    system.run(() => sanitizePlayerInventory(event.player));
   });
 
   system.runInterval(reconcileLoadedShops, 20);
