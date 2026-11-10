@@ -14,6 +14,37 @@ const SHOP_PROPERTY_PREFIX = "moolah:chest_shop:";
 const MINECOIN_GLYPH = "\uE102";
 const MAX_SHOP_NAME_LENGTH = 36;
 const MAX_DEFAULT_QUANTITY = 255;
+const SHOP_NAME_COLORS = [
+  { code: "§0", name: "black" },
+  { code: "§1", name: "dark_blue" },
+  { code: "§2", name: "dark_green" },
+  { code: "§3", name: "dark_aqua" },
+  { code: "§4", name: "dark_red" },
+  { code: "§5", name: "dark_purple" },
+  { code: "§6", name: "gold" },
+  { code: "§7", name: "gray" },
+  { code: "§8", name: "dark_gray" },
+  { code: "§9", name: "blue" },
+  { code: "§a", name: "green" },
+  { code: "§b", name: "aqua" },
+  { code: "§c", name: "red" },
+  { code: "§d", name: "light_purple" },
+  { code: "§e", name: "yellow" },
+  { code: "§f", name: "white" },
+  { code: "§h", name: "material_quartz" },
+  { code: "§i", name: "material_iron" },
+  { code: "§j", name: "material_netherite" },
+  { code: "§m", name: "material_redstone" },
+  { code: "§n", name: "material_copper" },
+  { code: "§p", name: "material_gold" },
+  { code: "§q", name: "material_emerald" },
+  { code: "§s", name: "material_diamond" },
+  { code: "§t", name: "material_lapis" },
+  { code: "§u", name: "material_amethyst" },
+  { code: "§v", name: "material_resin" },
+  { code: "§w", name: "party_blue" },
+];
+const SHOP_NAME_COLOR_CODES = new Set(SHOP_NAME_COLORS.map(({ code }) => code));
 const ADJACENT_OFFSETS = [
   { x: 1, y: 0, z: 0 },
   { x: -1, y: 0, z: 0 },
@@ -105,6 +136,7 @@ function parseShop(propertyId, raw) {
       || typeof shop.name !== "string"
       || shop.name.length < 1
       || shop.name.length > MAX_SHOP_NAME_LENGTH
+      || !(shop.nameColor === undefined || SHOP_NAME_COLOR_CODES.has(shop.nameColor))
       || !(shop.defaultPrice === undefined || (Number.isSafeInteger(shop.defaultPrice) && shop.defaultPrice > 0))
       || !(shop.defaultQuantity === undefined || (Number.isSafeInteger(shop.defaultQuantity) && shop.defaultQuantity > 0))
     ) return undefined;
@@ -327,13 +359,18 @@ function splitShopName(name) {
   return [name.slice(0, splitAt).trim(), name.slice(splitAt).trim().slice(0, 18)];
 }
 
+function formatShopName(shop) {
+  return shop.nameColor ? `${shop.nameColor}${shop.name}§r` : shop.name;
+}
+
 function decorateShopSign(shop) {
   try {
     const block = getShopBlock(shop, shop.signLocation);
     const sign = block?.getComponent("minecraft:sign");
     if (!sign) return;
     const [line2, line3] = splitShopName(shop.name);
-    const text = ["!ChestShop", line2, line3, ""].join("\n");
+    const colorLine = (line) => (line && shop.nameColor ? `${shop.nameColor}${line}§r` : line);
+    const text = ["!ChestShop", colorLine(line2), colorLine(line3), ""].join("\n");
     sign.setText(text, SignSide.Front);
     sign.setText(text, SignSide.Back);
   } catch {
@@ -737,6 +774,15 @@ function openShopConfig(player, shopId) {
     .textField("Shop Name", `1-${MAX_SHOP_NAME_LENGTH} characters`, {
       defaultValue: shop.name,
     })
+    .dropdown(
+      "Shop Name Color",
+      ["Default", ...SHOP_NAME_COLORS.map(({ code, name }) => `${name} — ${code}Sample§r`)],
+      {
+        defaultValueIndex: shop.nameColor
+          ? SHOP_NAME_COLORS.findIndex(({ code }) => code === shop.nameColor) + 1
+          : 0,
+      },
+    )
     .textField("Default Item Price", "Blank for no default", {
       defaultValue: shop.defaultPrice ? String(shop.defaultPrice) : "",
     })
@@ -750,8 +796,10 @@ function openShopConfig(player, shopId) {
     const current = shopsById.get(shopId);
     if (!current || current.ownerId !== player.id) return;
     const name = typeof response.formValues[0] === "string" ? response.formValues[0].trim() : "";
-    const priceText = typeof response.formValues[1] === "string" ? response.formValues[1].trim() : "";
-    const quantityText = typeof response.formValues[2] === "string" ? response.formValues[2].trim() : "";
+    const colorIndex = response.formValues[1];
+    const nameColor = colorIndex === 0 ? undefined : SHOP_NAME_COLORS[colorIndex - 1]?.code;
+    const priceText = typeof response.formValues[2] === "string" ? response.formValues[2].trim() : "";
+    const quantityText = typeof response.formValues[3] === "string" ? response.formValues[3].trim() : "";
     const hasDefaults = priceText !== "" || quantityText !== "";
     const defaultPrice = priceText === "" ? undefined : Number(priceText);
     const defaultQuantity = quantityText === "" ? undefined : Number(quantityText);
@@ -759,6 +807,10 @@ function openShopConfig(player, shopId) {
       !name
       || name.length > MAX_SHOP_NAME_LENGTH
       || /[\r\n§]/.test(name)
+      || !Number.isSafeInteger(colorIndex)
+      || colorIndex < 0
+      || colorIndex > SHOP_NAME_COLORS.length
+      || (colorIndex > 0 && !nameColor)
       || (hasDefaults && (
         !/^\d+$/.test(priceText)
         || !/^\d+$/.test(quantityText)
@@ -775,6 +827,7 @@ function openShopConfig(player, shopId) {
     const updated = {
       ...current,
       name,
+      nameColor,
       defaultPrice: hasDefaults ? defaultPrice : undefined,
       defaultQuantity: hasDefaults ? defaultQuantity : undefined,
     };
@@ -945,9 +998,9 @@ function buyListing(
       console.error(`[Moolah Chest Shop] Could not add ${tax} sales tax to the Tax Pool: ${error?.stack ?? error}`);
     }
     const setText = expectedQuantity > 1 ? ` (${setCount} set${setCount === 1 ? "" : "s"})` : "";
-    buyer.sendMessage(`Purchased ${itemCount}x ${getItemName(delivery)}${setText} from ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(total)}${tax ? ` (${MINECOIN_GLYPH}${formatAmount(tax)} tax)` : ""}. Sales are final.`);
+    buyer.sendMessage(`Purchased ${itemCount}x ${getItemName(delivery)}${setText} from ${formatShopName(shop)} for ${MINECOIN_GLYPH}${formatAmount(total)}${tax ? ` (${MINECOIN_GLYPH}${formatAmount(tax)} tax)` : ""}. Sales are final.`);
     const owner = getMoolahPlayers().find((player) => player.id === shop.ownerId);
-    owner?.sendMessage(`${itemCount}x ${getItemName(delivery)}${setText} sold at ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(subtotal)}. The payment is in your Inbox.`);
+    owner?.sendMessage(`${itemCount}x ${getItemName(delivery)}${setText} sold at ${formatShopName(shop)} for ${MINECOIN_GLYPH}${formatAmount(subtotal)}. The payment is in your Inbox.`);
     writeAuditLog("chest_shop", "Chest Shop Purchase", buyer, `${itemCount}x ${getItemName(delivery)} (${setCount} purchase unit(s)) from ${shop.ownerName} at ${shop.name}; price ${subtotal}; tax ${tax}; total ${total}.`);
   } catch (error) {
     buyer.sendMessage(error?.message ?? "The purchase could not be completed. No funds were moved.");
@@ -1094,7 +1147,7 @@ function openChestShop(player, shopId) {
     (entry) => entry.stockAmount >= entry.listing.quantity,
   );
   const form = new ActionFormData()
-    .title(shop.name)
+    .title(formatShopName(shop))
     .body(listings.length ? `Owned by ${shop.ownerName}. Choose an item to buy.` : "No items are currently for sale.");
   for (const entry of listings) {
     const purchases = Math.floor(entry.stockAmount / entry.listing.quantity);
@@ -1194,7 +1247,7 @@ function registerShop(player, signBlock, attached, fee) {
   }
   decorateShopSign(shop);
   normalizeShopItems(shop, true);
-  player.sendMessage(`${shop.name} registered${fee ? ` for ${MINECOIN_GLYPH}${formatAmount(fee)}` : ""}. Right-click the sign to configure it.`);
+  player.sendMessage(`${formatShopName(shop)} registered${fee ? ` for ${MINECOIN_GLYPH}${formatAmount(fee)}` : ""}. Right-click the sign to configure it.`);
   writeAuditLog("chest_shop", "Chest Shop Registered", player, `${shop.name}; ${attached.container.size === 54 ? "double chest" : attached.block.typeId}; fee ${fee}.`);
 }
 
@@ -1410,7 +1463,7 @@ export function initializeChestShopSystem() {
     beginOwnerStockSession(player, shop, true);
     system.run(() => {
       try {
-        player.onScreenDisplay.setActionBar(`Stocking: ${shop.name}`);
+        player.onScreenDisplay.setActionBar(`Stocking: ${formatShopName(shop)}`);
       } catch {
         // The owner may have left before the feedback could be displayed.
       }

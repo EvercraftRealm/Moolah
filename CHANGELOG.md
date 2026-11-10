@@ -25,6 +25,8 @@
   and logs scale with the selected quantity.
 - The virtual chest-close sound now waits until the final catalog, quantity,
   or confirmation window is closed.
+- Chest Shop owners can choose the color of their shop name from the full
+  classic and material color set, with the color shown on signs and shop UI.
 - Removed BedrockUnplugged-specific player filtering and documentation.
 
 ## 1.3.2 - 2026-11-07
