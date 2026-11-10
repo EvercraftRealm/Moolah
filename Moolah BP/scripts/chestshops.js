@@ -457,6 +457,14 @@ function compactItemVariant(item, maxLength = 52) {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 }
 
+function playChestShopSound(player, soundId) {
+  try {
+    player.playSound(soundId);
+  } catch {
+    // Sound feedback should never block the shop UI.
+  }
+}
+
 function getItemIconPath(item) {
   if (item.typeId === "moolah:moolah_pouch") return "textures/items/moolah_pouch";
   if (!item.typeId.startsWith("minecraft:")) return "textures/ui/moolah/market";
@@ -788,7 +796,45 @@ function restoreInventory(container, snapshot) {
   for (let slot = 0; slot < snapshot.length; slot++) container.setItem(slot, snapshot[slot]);
 }
 
-function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity, expectedSignature) {
+function getMatchingStock(shop, container, signature, price, quantity) {
+  const matches = [];
+  for (let slot = 0; slot < container.size; slot++) {
+    const listing = shop.listings?.[slot];
+    const item = container.getItem(slot);
+    if (
+      !item
+      || !listing
+      || listing.unsold
+      || listing.signature !== signature
+      || listing.price !== price
+      || listing.quantity !== quantity
+      || itemSignature(item) !== signature
+    ) continue;
+    matches.push({ slot, item });
+  }
+  return matches;
+}
+
+function addItemQuantity(container, template, quantity) {
+  let maxStackSize = 1;
+  try {
+    const probe = template.clone();
+    probe.amount = 255;
+    maxStackSize = probe.amount;
+  } catch {
+    maxStackSize = 1;
+  }
+  let remaining = quantity;
+  while (remaining > 0) {
+    const stack = template.clone();
+    stack.amount = Math.min(maxStackSize, remaining);
+    const remainder = container.addItem(stack);
+    if (remainder) throw new Error("You do not have enough inventory space for this purchase.");
+    remaining -= stack.amount;
+  }
+}
+
+function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSignature) {
   if (transactionLocks.has(shopId)) {
     buyer.sendMessage("That Chest Shop is busy. Try again.");
     return;
@@ -802,54 +848,57 @@ function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity, expect
     const container = getShopContainer(shop);
     const buyerInventory = buyer.getComponent("minecraft:inventory")?.container;
     if (!container?.isValid || !buyerInventory?.isValid) throw new Error("The shop or your inventory is unavailable.");
-    const stock = container.getItem(slot);
-    const listing = shop.listings?.[slot];
-    const currentSignature = stock && itemSignature(stock);
-    if (
-      !stock
-      || !listing
-      || listing.unsold
-      || listing.price !== expectedPrice
-      || listing.quantity !== expectedQuantity
-      || listing.signature !== expectedSignature
-      || currentSignature !== listing.signature
-      || stock.amount < listing.quantity
-    ) throw new Error("That stock changed before the purchase completed.");
-    const tax = calculateTax(listing.price, settings.chestShopTaxRate);
-    const total = listing.price + tax;
+    const matchingStock = getMatchingStock(
+      shop,
+      container,
+      expectedSignature,
+      expectedPrice,
+      expectedQuantity,
+    );
+    const available = matchingStock.reduce((total, entry) => total + entry.item.amount, 0);
+    if (matchingStock.length === 0 || available < expectedQuantity) {
+      throw new Error("That stock changed before the purchase completed.");
+    }
+    const tax = calculateTax(expectedPrice, settings.chestShopTaxRate);
+    const total = expectedPrice + tax;
     if (!Number.isSafeInteger(total)) throw new Error("That purchase total is too large.");
     if (getBalance(buyer) < total) throw new Error(`You need ${MINECOIN_GLYPH}${formatAmount(total)} to buy this item.`);
 
     const buyerSnapshot = snapshotInventory(buyerInventory);
-    const stockSnapshot = stock.clone();
-    const delivery = stock.clone();
-    delivery.amount = listing.quantity;
+    const shopSnapshot = snapshotInventory(container);
+    const delivery = matchingStock[0].item.clone();
     addBalance(buyer, -total);
     let shopMetadataChanged = false;
     try {
-      if (stock.amount === listing.quantity) {
-        container.setItem(slot);
-        const nextListings = { ...shop.listings };
-        delete nextListings[slot];
-        saveShop({ ...shop, listings: nextListings });
-        shopMetadataChanged = true;
-      } else {
-        stock.amount -= listing.quantity;
-        container.setItem(slot, stock);
+      let remaining = expectedQuantity;
+      const nextListings = { ...shop.listings };
+      for (const entry of matchingStock) {
+        if (remaining <= 0) break;
+        const taken = Math.min(entry.item.amount, remaining);
+        if (taken === entry.item.amount) {
+          container.setItem(entry.slot);
+          delete nextListings[entry.slot];
+          shopMetadataChanged = true;
+        } else {
+          entry.item.amount -= taken;
+          container.setItem(entry.slot, entry.item);
+        }
+        remaining -= taken;
       }
-      const remainder = buyerInventory.addItem(delivery);
-      if (remainder) throw new Error("You do not have enough inventory space for this purchase.");
+      if (remaining !== 0) throw new Error("The shop stock could not be reserved.");
+      if (shopMetadataChanged) saveShop({ ...shop, listings: nextListings });
+      addItemQuantity(buyerInventory, delivery, expectedQuantity);
       const onlineOwner = getMoolahPlayers().find((player) => player.id === shop.ownerId);
       const sellerName = onlineOwner?.name ?? shop.ownerName;
       if (!createSystemInboxPayment(
         sellerName,
-        listing.price,
-        `Chest Shop sale: ${listing.quantity}x ${getItemName(delivery)} to ${buyer.name}`,
+        expectedPrice,
+        `Chest Shop sale: ${expectedQuantity}x ${getItemName(delivery)} to ${buyer.name}`,
       )) throw new Error("The seller payment could not be secured.");
     } catch (error) {
       let rollbackFailed = false;
       try {
-        container.setItem(slot, stockSnapshot);
+        restoreInventory(container, shopSnapshot);
       } catch {
         rollbackFailed = true;
       }
@@ -880,10 +929,10 @@ function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity, expect
     } catch (error) {
       console.error(`[Moolah Chest Shop] Could not add ${tax} sales tax to the Tax Pool: ${error?.stack ?? error}`);
     }
-    buyer.sendMessage(`Purchased ${listing.quantity}x ${getItemName(delivery)} from ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(total)}${tax ? ` (${MINECOIN_GLYPH}${formatAmount(tax)} tax)` : ""}. Sales are final.`);
+    buyer.sendMessage(`Purchased ${expectedQuantity}x ${getItemName(delivery)} from ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(total)}${tax ? ` (${MINECOIN_GLYPH}${formatAmount(tax)} tax)` : ""}. Sales are final.`);
     const owner = getMoolahPlayers().find((player) => player.id === shop.ownerId);
-    owner?.sendMessage(`${listing.quantity}x ${getItemName(delivery)} sold at ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(listing.price)}. The payment is in your Inbox.`);
-    writeAuditLog("chest_shop", "Chest Shop Purchase", buyer, `${listing.quantity}x ${getItemName(delivery)} from ${shop.ownerName} at ${shop.name}; price ${listing.price}; tax ${tax}; total ${total}.`);
+    owner?.sendMessage(`${expectedQuantity}x ${getItemName(delivery)} sold at ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(expectedPrice)}. The payment is in your Inbox.`);
+    writeAuditLog("chest_shop", "Chest Shop Purchase", buyer, `${expectedQuantity}x ${getItemName(delivery)} from ${shop.ownerName} at ${shop.name}; price ${expectedPrice}; tax ${tax}; total ${total}.`);
   } catch (error) {
     buyer.sendMessage(error?.message ?? "The purchase could not be completed. No funds were moved.");
   } finally {
@@ -891,7 +940,7 @@ function buyListing(buyer, shopId, slot, expectedPrice, expectedQuantity, expect
   }
 }
 
-function confirmPurchase(player, shopId, slot, listing, item) {
+function confirmPurchase(player, shopId, listing, item) {
   const settings = getEconomySettings();
   const tax = calculateTax(listing.price, settings.chestShopTaxRate);
   const total = listing.price + tax;
@@ -911,7 +960,6 @@ function confirmPurchase(player, shopId, slot, listing, item) {
       system.run(() => buyListing(
         player,
         shopId,
-        slot,
         listing.price,
         listing.quantity,
         listing.signature,
@@ -937,7 +985,7 @@ function openChestShop(player, shopId) {
     player.sendMessage("That Chest Shop is unavailable.");
     return;
   }
-  const listings = [];
+  const groupedListings = new Map();
   for (let slot = 0; slot < container.size; slot++) {
     const item = container.getItem(slot);
     const listing = shop.listings?.[slot];
@@ -946,28 +994,49 @@ function openChestShop(player, shopId) {
       && listing
       && listing.signature === itemSignature(item)
       && !listing.unsold
-      && item.amount >= listing.quantity
     ) {
-      listings.push({ slot, item, listing });
+      const groupKey = JSON.stringify([
+        listing.signature,
+        listing.price,
+        listing.quantity,
+      ]);
+      const existing = groupedListings.get(groupKey);
+      if (existing) {
+        existing.stockAmount += item.amount;
+      } else {
+        groupedListings.set(groupKey, {
+          item,
+          listing,
+          stockAmount: item.amount,
+        });
+      }
     }
   }
+  const listings = [...groupedListings.values()].filter(
+    (entry) => entry.stockAmount >= entry.listing.quantity,
+  );
   const form = new ActionFormData()
     .title(shop.name)
     .body(listings.length ? `Owned by ${shop.ownerName}. Choose an item to buy.` : "No items are currently for sale.");
   for (const entry of listings) {
-    const purchases = Math.floor(entry.item.amount / entry.listing.quantity);
+    const purchases = Math.floor(entry.stockAmount / entry.listing.quantity);
     form.button(
       `${entry.listing.quantity}x ${getItemName(entry.item)} — ${MINECOIN_GLYPH}${formatAmount(entry.listing.price)}\n`
-        + `${compactItemVariant(entry.item)} • ${entry.item.amount} stock • ${purchases} purchase${purchases === 1 ? "" : "s"}`,
+        + `${compactItemVariant(entry.item)} • ${entry.stockAmount} stock • ${purchases} purchase${purchases === 1 ? "" : "s"}`,
       getItemIconPath(entry.item),
     );
   }
+  playChestShopSound(player, "random.chestopen");
   form.show(player).then((response) => {
+    playChestShopSound(player, "random.chestclosed");
     if (response.canceled || response.selection === undefined) return;
     const selected = listings[response.selection];
     if (!selected) return;
-    system.run(() => confirmPurchase(player, shopId, selected.slot, selected.listing, selected.item));
-  }).catch(() => player.sendMessage("The Chest Shop menu could not be opened."));
+    system.run(() => confirmPurchase(player, shopId, selected.listing, selected.item));
+  }).catch(() => {
+    playChestShopSound(player, "random.chestclosed");
+    player.sendMessage("The Chest Shop menu could not be opened.");
+  });
 }
 
 function registerShop(player, signBlock, attached, fee) {

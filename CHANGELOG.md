@@ -17,6 +17,9 @@
 - Chest Shop listings and owner pricing dialogs now distinguish item variants
   with potion effects, enchantments, book details, durability, lore, storage
   contents, underlying item types, and exact owner-facing chest slot numbers.
+- Buyer catalogs combine identical stock with matching prices and purchase
+  quantities into one listing, including stock spread across partial stacks.
+- Buyer Chest Shop catalogs play vanilla chest-open and chest-close sounds.
 - Removed BedrockUnplugged-specific player filtering and documentation.
 
 ## 1.3.2 - 2026-11-07
