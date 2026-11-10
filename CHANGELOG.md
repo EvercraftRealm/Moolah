@@ -20,8 +20,8 @@
 - Buyer catalogs combine identical stock with matching prices and purchase
   quantities into one listing, including stock spread across partial stacks.
 - Buyer Chest Shop catalogs play vanilla chest-open and chest-close sounds.
-- Chest Shop buyers can select multiple items or configured sets from a valid
-  stock-based dropdown before confirmation; totals, tax, proceeds, delivery,
+- Chest Shop buyers can select multiple items or configured sets from a
+  stock-based slider before confirmation; totals, tax, proceeds, delivery,
   and logs scale with the selected quantity.
 - The virtual chest-close sound now waits until the final catalog, quantity,
   or confirmation window is closed.

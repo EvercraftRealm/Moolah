@@ -1063,25 +1063,21 @@ function openPurchaseQuantityMenu(player, shopId, entry) {
     system.run(() => confirmPurchase(player, shopId, entry.listing, entry.item, 1));
     return;
   }
-  const options = [];
-  for (let setCount = 1; setCount <= maxSets; setCount++) {
-    const itemCount = setCount * entry.listing.quantity;
-    options.push(entry.listing.quantity > 1
-      ? `${setCount} set${setCount === 1 ? "" : "s"} (${itemCount} items)`
-      : `${itemCount} item${itemCount === 1 ? "" : "s"}`);
-  }
+  const quantityLabel = entry.listing.quantity > 1
+    ? `Sets (${entry.listing.quantity} items each)`
+    : "Items";
   const form = new ModalFormData()
     .title("Purchase Quantity")
     .label(`${getItemName(entry.item)}\n${compactItemVariant(entry.item, 120)}`)
-    .dropdown("How many?", options, { defaultValueIndex: 0 })
+    .slider(quantityLabel, 1, maxSets, { defaultValue: 1, valueStep: 1 })
     .submitButton("Continue");
   form.show(player).then((response) => {
     if (response.canceled || !response.formValues) {
       playChestShopSound(player, "random.chestclosed");
       return;
     }
-    const selectedIndex = response.formValues[1];
-    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= options.length) {
+    const selectedSets = response.formValues[1];
+    if (!Number.isSafeInteger(selectedSets) || selectedSets < 1 || selectedSets > maxSets) {
       player.sendMessage("That purchase quantity was invalid.");
       playChestShopSound(player, "random.chestclosed");
       return;
@@ -1091,7 +1087,7 @@ function openPurchaseQuantityMenu(player, shopId, entry) {
       shopId,
       entry.listing,
       entry.item,
-      selectedIndex + 1,
+      selectedSets,
     ));
   }).catch(() => {
     playChestShopSound(player, "random.chestclosed");
