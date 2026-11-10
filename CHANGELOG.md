@@ -25,8 +25,12 @@
   and logs scale with the selected quantity.
 - The virtual chest-close sound now waits until the final catalog, quantity,
   or confirmation window is closed.
+- Closing a Chest Shop sub-menu now returns to its parent: quantity returns to
+  the catalog, and purchase confirmation returns to quantity with a Back button.
 - Chest Shop owners can choose the color of their shop name from the full
   classic and material color set, with the color shown on signs and shop UI.
+- Chest Shop owners can set a custom buyer-catalog description or leave it
+  blank to retain the default owner and purchase prompt.
 - Fixed the Chest Shop icons for normal, writable, written, and enchanted
   books by using their vanilla texture paths.
 - Removed BedrockUnplugged-specific player filtering and documentation.

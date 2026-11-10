@@ -13,6 +13,7 @@ import { getMoolahPlayers, isMoolahPlayer } from "./players.js";
 const SHOP_PROPERTY_PREFIX = "moolah:chest_shop:";
 const MINECOIN_GLYPH = "\uE102";
 const MAX_SHOP_NAME_LENGTH = 36;
+const MAX_SHOP_DESCRIPTION_LENGTH = 160;
 const MAX_DEFAULT_QUANTITY = 255;
 const VANILLA_ITEM_ICON_OVERRIDES = new Map([
   ["minecraft:book", "textures/items/book_normal"],
@@ -143,6 +144,12 @@ function parseShop(propertyId, raw) {
       || shop.name.length < 1
       || shop.name.length > MAX_SHOP_NAME_LENGTH
       || !(shop.nameColor === undefined || SHOP_NAME_COLOR_CODES.has(shop.nameColor))
+      || !(shop.description === undefined || (
+        typeof shop.description === "string"
+        && shop.description.length > 0
+        && shop.description.length <= MAX_SHOP_DESCRIPTION_LENGTH
+        && !/[\r\n§]/.test(shop.description)
+      ))
       || !(shop.defaultPrice === undefined || (Number.isSafeInteger(shop.defaultPrice) && shop.defaultPrice > 0))
       || !(shop.defaultQuantity === undefined || (Number.isSafeInteger(shop.defaultQuantity) && shop.defaultQuantity > 0))
     ) return undefined;
@@ -782,6 +789,9 @@ function openShopConfig(player, shopId) {
     .textField("Shop Name", `1-${MAX_SHOP_NAME_LENGTH} characters`, {
       defaultValue: shop.name,
     })
+    .textField("Shop Description", `Blank uses the default (max ${MAX_SHOP_DESCRIPTION_LENGTH} characters)`, {
+      defaultValue: shop.description ?? "",
+    })
     .dropdown(
       "Shop Name Color",
       ["Default", ...SHOP_NAME_COLORS.map(({ code, name }) => `${name} — ${code}Sample§r`)],
@@ -804,10 +814,13 @@ function openShopConfig(player, shopId) {
     const current = shopsById.get(shopId);
     if (!current || current.ownerId !== player.id) return;
     const name = typeof response.formValues[0] === "string" ? response.formValues[0].trim() : "";
-    const colorIndex = response.formValues[1];
+    const description = typeof response.formValues[1] === "string"
+      ? response.formValues[1].trim()
+      : "";
+    const colorIndex = response.formValues[2];
     const nameColor = colorIndex === 0 ? undefined : SHOP_NAME_COLORS[colorIndex - 1]?.code;
-    const priceText = typeof response.formValues[2] === "string" ? response.formValues[2].trim() : "";
-    const quantityText = typeof response.formValues[3] === "string" ? response.formValues[3].trim() : "";
+    const priceText = typeof response.formValues[3] === "string" ? response.formValues[3].trim() : "";
+    const quantityText = typeof response.formValues[4] === "string" ? response.formValues[4].trim() : "";
     const hasDefaults = priceText !== "" || quantityText !== "";
     const defaultPrice = priceText === "" ? undefined : Number(priceText);
     const defaultQuantity = quantityText === "" ? undefined : Number(quantityText);
@@ -815,6 +828,8 @@ function openShopConfig(player, shopId) {
       !name
       || name.length > MAX_SHOP_NAME_LENGTH
       || /[\r\n§]/.test(name)
+      || description.length > MAX_SHOP_DESCRIPTION_LENGTH
+      || /[\r\n§]/.test(description)
       || !Number.isSafeInteger(colorIndex)
       || colorIndex < 0
       || colorIndex > SHOP_NAME_COLORS.length
@@ -835,6 +850,7 @@ function openShopConfig(player, shopId) {
     const updated = {
       ...current,
       name,
+      description: description || undefined,
       nameColor,
       defaultPrice: hasDefaults ? defaultPrice : undefined,
       defaultQuantity: hasDefaults ? defaultQuantity : undefined,
@@ -1017,7 +1033,8 @@ function buyListing(
   }
 }
 
-function confirmPurchase(player, shopId, listing, item, setCount) {
+function confirmPurchase(player, shopId, entry, setCount, hasQuantityStep) {
+  const { item, listing } = entry;
   const settings = getEconomySettings();
   const itemCount = listing.quantity * setCount;
   const subtotal = listing.price * setCount;
@@ -1046,10 +1063,10 @@ function confirmPurchase(player, shopId, listing, item, setCount) {
       + "Payments are non-refundable and items cannot be returned.",
     )
     .button1("Buy")
-    .button2("Cancel");
+    .button2("Back");
   form.show(player).then((response) => {
-    playChestShopSound(player, "random.chestclosed");
     if (!response.canceled && response.selection === 0) {
+      playChestShopSound(player, "random.chestclosed");
       system.run(() => buyListing(
         player,
         shopId,
@@ -1058,30 +1075,73 @@ function confirmPurchase(player, shopId, listing, item, setCount) {
         listing.signature,
         setCount,
       ));
+      return;
     }
+    system.run(() => {
+      if (hasQuantityStep) {
+        openPurchaseQuantityMenu(player, shopId, entry, setCount, true);
+      } else {
+        openChestShop(player, shopId, true);
+      }
+    });
   }).catch(() => {
     playChestShopSound(player, "random.chestclosed");
     player.sendMessage("The purchase confirmation could not be opened.");
   });
 }
 
-function openPurchaseQuantityMenu(player, shopId, entry) {
-  const maxSets = Math.floor(entry.stockAmount / entry.listing.quantity);
-  if (maxSets <= 1) {
-    system.run(() => confirmPurchase(player, shopId, entry.listing, entry.item, 1));
+function refreshPurchaseEntry(shopId, entry) {
+  const shop = shopsById.get(shopId);
+  const container = shop && getShopContainer(shop);
+  if (!shop || !container?.isValid) return undefined;
+  const matchingStock = getMatchingStock(
+    shop,
+    container,
+    entry.listing.signature,
+    entry.listing.price,
+    entry.listing.quantity,
+  );
+  if (matchingStock.length === 0) return undefined;
+  return {
+    ...entry,
+    item: matchingStock[0].item,
+    stockAmount: matchingStock.reduce((total, stock) => total + stock.item.amount, 0),
+  };
+}
+
+function openPurchaseQuantityMenu(
+  player,
+  shopId,
+  originalEntry,
+  defaultSetCount = 1,
+  returningFromConfirmation = false,
+) {
+  const entry = refreshPurchaseEntry(shopId, originalEntry);
+  if (!entry || entry.stockAmount < entry.listing.quantity) {
+    player.sendMessage("That item is no longer available in this Chest Shop.");
+    system.run(() => openChestShop(player, shopId, true));
     return;
   }
+  const maxSets = Math.floor(entry.stockAmount / entry.listing.quantity);
+  if (maxSets <= 1) {
+    system.run(() => {
+      if (returningFromConfirmation) openChestShop(player, shopId, true);
+      else confirmPurchase(player, shopId, entry, 1, false);
+    });
+    return;
+  }
+  const initialSetCount = Math.max(1, Math.min(defaultSetCount, maxSets));
   const quantityLabel = entry.listing.quantity > 1
     ? `Sets (${entry.listing.quantity} items each)`
     : "Items";
   const form = new ModalFormData()
     .title("Purchase Quantity")
     .label(`${getItemName(entry.item)}\n${compactItemVariant(entry.item, 120)}`)
-    .slider(quantityLabel, 1, maxSets, { defaultValue: 1, valueStep: 1 })
+    .slider(quantityLabel, 1, maxSets, { defaultValue: initialSetCount, valueStep: 1 })
     .submitButton("Continue");
   form.show(player).then((response) => {
     if (response.canceled || !response.formValues) {
-      playChestShopSound(player, "random.chestclosed");
+      system.run(() => openChestShop(player, shopId, true));
       return;
     }
     const selectedSets = response.formValues[1];
@@ -1093,9 +1153,9 @@ function openPurchaseQuantityMenu(player, shopId, entry) {
     system.run(() => confirmPurchase(
       player,
       shopId,
-      entry.listing,
-      entry.item,
+      entry,
       selectedSets,
+      true,
     ));
   }).catch(() => {
     playChestShopSound(player, "random.chestclosed");
@@ -1103,21 +1163,24 @@ function openPurchaseQuantityMenu(player, shopId, entry) {
   });
 }
 
-function openChestShop(player, shopId) {
+function openChestShop(player, shopId, sessionActive = false) {
   let shop = shopsById.get(shopId);
   if (!shop || !getEconomySettings().allowChestShops) {
     player.sendMessage("Chest Shops are currently disabled.");
+    if (sessionActive) playChestShopSound(player, "random.chestclosed");
     return;
   }
   normalizeShopItems(shop, false);
   shop = shopsById.get(shopId);
   if (!shop) {
     player.sendMessage("That Chest Shop is no longer available.");
+    if (sessionActive) playChestShopSound(player, "random.chestclosed");
     return;
   }
   const container = getShopContainer(shop);
   if (!container?.isValid) {
     player.sendMessage("That Chest Shop is unavailable.");
+    if (sessionActive) playChestShopSound(player, "random.chestclosed");
     return;
   }
   const groupedListings = new Map();
@@ -1150,9 +1213,11 @@ function openChestShop(player, shopId) {
   const listings = [...groupedListings.values()].filter(
     (entry) => entry.stockAmount >= entry.listing.quantity,
   );
+  const catalogDescription = shop.description
+    ?? `Owned by ${shop.ownerName}. Choose an item to buy.`;
   const form = new ActionFormData()
     .title(formatShopName(shop))
-    .body(listings.length ? `Owned by ${shop.ownerName}. Choose an item to buy.` : "No items are currently for sale.");
+    .body(listings.length ? catalogDescription : "No items are currently for sale.");
   for (const entry of listings) {
     const purchases = Math.floor(entry.stockAmount / entry.listing.quantity);
     form.button(
@@ -1161,7 +1226,7 @@ function openChestShop(player, shopId) {
       getItemIconPath(entry.item),
     );
   }
-  playChestShopSound(player, "random.chestopen");
+  if (!sessionActive) playChestShopSound(player, "random.chestopen");
   form.show(player).then((response) => {
     if (response.canceled || response.selection === undefined) {
       playChestShopSound(player, "random.chestclosed");
