@@ -28,6 +28,9 @@ const shopsBySign = new Map();
 const shopsByContainer = new Map();
 const transactionLocks = new Set();
 const reconciliationLocks = new Set();
+const ownerStockSessions = new Map();
+const PENDING_STOCK_SESSION_TICKS = 40;
+const ACTIVE_STOCK_SESSION_TICKS = 20 * 60 * 10;
 let shopsLoaded = false;
 let initialized = false;
 
@@ -155,6 +158,25 @@ function saveShop(shop) {
 function deleteShop(shop) {
   world.setDynamicProperty(shop.propertyId, undefined);
   unindexShop(shop);
+  ownerStockSessions.delete(shop.id);
+}
+
+function beginOwnerStockSession(player, shop, active = false) {
+  ownerStockSessions.set(shop.id, {
+    playerId: player.id,
+    active,
+    expiresAt: system.currentTick + (
+      active ? ACTIVE_STOCK_SESSION_TICKS : PENDING_STOCK_SESSION_TICKS
+    ),
+  });
+}
+
+function hasActiveStockSession(shopId) {
+  const session = ownerStockSessions.get(shopId);
+  if (!session) return false;
+  if (system.currentTick <= session.expiresAt) return true;
+  ownerStockSessions.delete(shopId);
+  return false;
 }
 
 function getShopBySign(block) {
@@ -1017,6 +1039,7 @@ function reconcileLoadedShops() {
   loadShops();
   for (const shop of shopsById.values()) {
     try {
+      if (hasActiveStockSession(shop.id)) continue;
       const sign = getShopBlock(shop, shop.signLocation);
       const container = getShopContainer(shop);
       if (!sign?.getComponent("minecraft:sign") || !container?.isValid) continue;
@@ -1076,10 +1099,14 @@ export function initializeChestShopSystem() {
       return;
     }
     const containerShop = getShopByContainer(event.block);
-    if (containerShop && event.player.id !== containerShop.ownerId) {
-      event.cancel = true;
-      system.run(() => openChestShop(event.player, containerShop.id));
-      return;
+    if (containerShop) {
+      if (event.player.id === containerShop.ownerId) {
+        beginOwnerStockSession(event.player, containerShop);
+      } else {
+        event.cancel = true;
+        system.run(() => openChestShop(event.player, containerShop.id));
+        return;
+      }
     }
     const hopperShop = findShopProtectingHopper(event.block);
     if (hopperShop && event.player.id !== hopperShop.ownerId) {
@@ -1117,11 +1144,40 @@ export function initializeChestShopSystem() {
     )));
   });
 
+  world.afterEvents.blockContainerOpened.subscribe((event) => {
+    const shop = getShopByContainer(event.block);
+    const player = event.openSource?.entity;
+    if (!shop || player?.typeId !== "minecraft:player" || player.id !== shop.ownerId) return;
+    beginOwnerStockSession(player, shop, true);
+    system.run(() => {
+      try {
+        player.onScreenDisplay.setActionBar(`Stocking: ${shop.name}`);
+      } catch {
+        // The owner may have left before the feedback could be displayed.
+      }
+    });
+  });
+
   world.afterEvents.blockContainerClosed.subscribe((event) => {
     const shop = getShopByContainer(event.block);
-    const player = event.closeSource?.entity;
-    if (!shop || player?.typeId !== "minecraft:player" || player.id !== shop.ownerId) return;
-    system.run(() => normalizeShopItems(shop, true));
+    if (!shop) return;
+    const eventPlayer = event.closeSource?.entity;
+    const session = ownerStockSessions.get(shop.id);
+    const player = eventPlayer?.typeId === "minecraft:player"
+      ? eventPlayer
+      : getMoolahPlayers().find((candidate) => candidate.id === session?.playerId);
+    if (!player || player.id !== shop.ownerId) return;
+    ownerStockSessions.delete(shop.id);
+    system.run(() => {
+      const currentShop = shopsById.get(shop.id);
+      if (currentShop) normalizeShopItems(currentShop, true);
+    });
+  });
+
+  world.afterEvents.playerLeave.subscribe((event) => {
+    for (const [shopId, session] of ownerStockSessions) {
+      if (session.playerId === event.playerId) ownerStockSessions.delete(shopId);
+    }
   });
 
   system.runInterval(reconcileLoadedShops, 20);
