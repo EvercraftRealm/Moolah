@@ -834,7 +834,14 @@ function addItemQuantity(container, template, quantity) {
   }
 }
 
-function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSignature) {
+function buyListing(
+  buyer,
+  shopId,
+  expectedPrice,
+  expectedQuantity,
+  expectedSignature,
+  setCount,
+) {
   if (transactionLocks.has(shopId)) {
     buyer.sendMessage("That Chest Shop is busy. Try again.");
     return;
@@ -855,12 +862,20 @@ function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSign
       expectedPrice,
       expectedQuantity,
     );
+    if (!Number.isSafeInteger(setCount) || setCount < 1) {
+      throw new Error("That purchase quantity is invalid.");
+    }
+    const itemCount = expectedQuantity * setCount;
+    const subtotal = expectedPrice * setCount;
+    if (!Number.isSafeInteger(itemCount) || !Number.isSafeInteger(subtotal)) {
+      throw new Error("That purchase total is too large.");
+    }
     const available = matchingStock.reduce((total, entry) => total + entry.item.amount, 0);
-    if (matchingStock.length === 0 || available < expectedQuantity) {
+    if (matchingStock.length === 0 || available < itemCount) {
       throw new Error("That stock changed before the purchase completed.");
     }
-    const tax = calculateTax(expectedPrice, settings.chestShopTaxRate);
-    const total = expectedPrice + tax;
+    const tax = calculateTax(subtotal, settings.chestShopTaxRate);
+    const total = subtotal + tax;
     if (!Number.isSafeInteger(total)) throw new Error("That purchase total is too large.");
     if (getBalance(buyer) < total) throw new Error(`You need ${MINECOIN_GLYPH}${formatAmount(total)} to buy this item.`);
 
@@ -870,7 +885,7 @@ function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSign
     addBalance(buyer, -total);
     let shopMetadataChanged = false;
     try {
-      let remaining = expectedQuantity;
+      let remaining = itemCount;
       const nextListings = { ...shop.listings };
       for (const entry of matchingStock) {
         if (remaining <= 0) break;
@@ -887,13 +902,13 @@ function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSign
       }
       if (remaining !== 0) throw new Error("The shop stock could not be reserved.");
       if (shopMetadataChanged) saveShop({ ...shop, listings: nextListings });
-      addItemQuantity(buyerInventory, delivery, expectedQuantity);
+      addItemQuantity(buyerInventory, delivery, itemCount);
       const onlineOwner = getMoolahPlayers().find((player) => player.id === shop.ownerId);
       const sellerName = onlineOwner?.name ?? shop.ownerName;
       if (!createSystemInboxPayment(
         sellerName,
-        expectedPrice,
-        `Chest Shop sale: ${expectedQuantity}x ${getItemName(delivery)} to ${buyer.name}`,
+        subtotal,
+        `Chest Shop sale: ${itemCount}x ${getItemName(delivery)} to ${buyer.name}`,
       )) throw new Error("The seller payment could not be secured.");
     } catch (error) {
       let rollbackFailed = false;
@@ -929,10 +944,11 @@ function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSign
     } catch (error) {
       console.error(`[Moolah Chest Shop] Could not add ${tax} sales tax to the Tax Pool: ${error?.stack ?? error}`);
     }
-    buyer.sendMessage(`Purchased ${expectedQuantity}x ${getItemName(delivery)} from ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(total)}${tax ? ` (${MINECOIN_GLYPH}${formatAmount(tax)} tax)` : ""}. Sales are final.`);
+    const setText = expectedQuantity > 1 ? ` (${setCount} set${setCount === 1 ? "" : "s"})` : "";
+    buyer.sendMessage(`Purchased ${itemCount}x ${getItemName(delivery)}${setText} from ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(total)}${tax ? ` (${MINECOIN_GLYPH}${formatAmount(tax)} tax)` : ""}. Sales are final.`);
     const owner = getMoolahPlayers().find((player) => player.id === shop.ownerId);
-    owner?.sendMessage(`${expectedQuantity}x ${getItemName(delivery)} sold at ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(expectedPrice)}. The payment is in your Inbox.`);
-    writeAuditLog("chest_shop", "Chest Shop Purchase", buyer, `${expectedQuantity}x ${getItemName(delivery)} from ${shop.ownerName} at ${shop.name}; price ${expectedPrice}; tax ${tax}; total ${total}.`);
+    owner?.sendMessage(`${itemCount}x ${getItemName(delivery)}${setText} sold at ${shop.name} for ${MINECOIN_GLYPH}${formatAmount(subtotal)}. The payment is in your Inbox.`);
+    writeAuditLog("chest_shop", "Chest Shop Purchase", buyer, `${itemCount}x ${getItemName(delivery)} (${setCount} purchase unit(s)) from ${shop.ownerName} at ${shop.name}; price ${subtotal}; tax ${tax}; total ${total}.`);
   } catch (error) {
     buyer.sendMessage(error?.message ?? "The purchase could not be completed. No funds were moved.");
   } finally {
@@ -940,15 +956,30 @@ function buyListing(buyer, shopId, expectedPrice, expectedQuantity, expectedSign
   }
 }
 
-function confirmPurchase(player, shopId, listing, item) {
+function confirmPurchase(player, shopId, listing, item, setCount) {
   const settings = getEconomySettings();
-  const tax = calculateTax(listing.price, settings.chestShopTaxRate);
-  const total = listing.price + tax;
+  const itemCount = listing.quantity * setCount;
+  const subtotal = listing.price * setCount;
+  if (!Number.isSafeInteger(itemCount) || !Number.isSafeInteger(subtotal)) {
+    player.sendMessage("That purchase total is too large.");
+    playChestShopSound(player, "random.chestclosed");
+    return;
+  }
+  const tax = calculateTax(subtotal, settings.chestShopTaxRate);
+  const total = subtotal + tax;
+  if (!Number.isSafeInteger(total)) {
+    player.sendMessage("That purchase total is too large.");
+    playChestShopSound(player, "random.chestclosed");
+    return;
+  }
+  const quantityText = listing.quantity > 1
+    ? `${setCount} set${setCount === 1 ? "" : "s"} (${itemCount} items)`
+    : `${itemCount} item${itemCount === 1 ? "" : "s"}`;
   const form = new MessageFormData()
     .title("Confirm Purchase")
     .body(
-      `${listing.quantity}x ${getItemName(item)}\n`
-      + `Price: ${MINECOIN_GLYPH}${formatAmount(listing.price)}\n`
+      `${quantityText} — ${getItemName(item)}\n`
+      + `Price: ${MINECOIN_GLYPH}${formatAmount(subtotal)}\n`
       + `Sales tax: ${MINECOIN_GLYPH}${formatAmount(tax)}\n`
       + `Total: ${MINECOIN_GLYPH}${formatAmount(total)}\n\n`
       + "Payments are non-refundable and items cannot be returned.",
@@ -956,6 +987,7 @@ function confirmPurchase(player, shopId, listing, item) {
     .button1("Buy")
     .button2("Cancel");
   form.show(player).then((response) => {
+    playChestShopSound(player, "random.chestclosed");
     if (!response.canceled && response.selection === 0) {
       system.run(() => buyListing(
         player,
@@ -963,9 +995,55 @@ function confirmPurchase(player, shopId, listing, item) {
         listing.price,
         listing.quantity,
         listing.signature,
+        setCount,
       ));
     }
-  }).catch(() => player.sendMessage("The purchase confirmation could not be opened."));
+  }).catch(() => {
+    playChestShopSound(player, "random.chestclosed");
+    player.sendMessage("The purchase confirmation could not be opened.");
+  });
+}
+
+function openPurchaseQuantityMenu(player, shopId, entry) {
+  const maxSets = Math.floor(entry.stockAmount / entry.listing.quantity);
+  if (maxSets <= 1) {
+    system.run(() => confirmPurchase(player, shopId, entry.listing, entry.item, 1));
+    return;
+  }
+  const options = [];
+  for (let setCount = 1; setCount <= maxSets; setCount++) {
+    const itemCount = setCount * entry.listing.quantity;
+    options.push(entry.listing.quantity > 1
+      ? `${setCount} set${setCount === 1 ? "" : "s"} (${itemCount} items)`
+      : `${itemCount} item${itemCount === 1 ? "" : "s"}`);
+  }
+  const form = new ModalFormData()
+    .title("Purchase Quantity")
+    .label(`${getItemName(entry.item)}\n${compactItemVariant(entry.item, 120)}`)
+    .dropdown("How many?", options, { defaultValueIndex: 0 })
+    .submitButton("Continue");
+  form.show(player).then((response) => {
+    if (response.canceled || !response.formValues) {
+      playChestShopSound(player, "random.chestclosed");
+      return;
+    }
+    const selectedIndex = response.formValues[1];
+    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= options.length) {
+      player.sendMessage("That purchase quantity was invalid.");
+      playChestShopSound(player, "random.chestclosed");
+      return;
+    }
+    system.run(() => confirmPurchase(
+      player,
+      shopId,
+      entry.listing,
+      entry.item,
+      selectedIndex + 1,
+    ));
+  }).catch(() => {
+    playChestShopSound(player, "random.chestclosed");
+    player.sendMessage("The purchase quantity menu could not be opened.");
+  });
 }
 
 function openChestShop(player, shopId) {
@@ -1028,11 +1106,16 @@ function openChestShop(player, shopId) {
   }
   playChestShopSound(player, "random.chestopen");
   form.show(player).then((response) => {
-    playChestShopSound(player, "random.chestclosed");
-    if (response.canceled || response.selection === undefined) return;
+    if (response.canceled || response.selection === undefined) {
+      playChestShopSound(player, "random.chestclosed");
+      return;
+    }
     const selected = listings[response.selection];
-    if (!selected) return;
-    system.run(() => confirmPurchase(player, shopId, selected.listing, selected.item));
+    if (!selected) {
+      playChestShopSound(player, "random.chestclosed");
+      return;
+    }
+    system.run(() => openPurchaseQuantityMenu(player, shopId, selected));
   }).catch(() => {
     playChestShopSound(player, "random.chestclosed");
     player.sendMessage("The Chest Shop menu could not be opened.");
