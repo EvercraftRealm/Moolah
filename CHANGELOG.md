@@ -6,6 +6,9 @@
   pricing instead of reusing its exact saved price and purchase quantity.
 - Closing an item-pricing dialog stops the current queue without trapping the
   owner; genuinely Unsold items requeue after a later stocking session.
+- Restored physical Chest Shop sign-name updates with next-tick writes,
+  independent front/back handling, visible errors, and a plain-text fallback
+  if a selected formatting color is rejected by the sign API.
 
 ## 1.3.3 - 2026-11-10 (Local Test)
 

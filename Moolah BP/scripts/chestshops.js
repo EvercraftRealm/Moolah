@@ -376,19 +376,57 @@ function formatShopName(shop) {
   return shop.nameColor ? `${shop.nameColor}${shop.name}§r` : shop.name;
 }
 
+function setShopSignSideText(sign, side, formattedText, plainText, shop) {
+  try {
+    sign.setText(formattedText, side);
+    return true;
+  } catch (formattedError) {
+    if (formattedText !== plainText) {
+      try {
+        sign.setText(plainText, side);
+        console.warn(`[Moolah Chest Shop] ${shop.name}'s sign rejected its selected name color; the plain shop name was applied instead.`);
+        return true;
+      } catch {
+        // Report the original formatted write error below with the shop location.
+      }
+    }
+    console.warn(`[Moolah Chest Shop] Could not update ${shop.name}'s sign at ${shop.dimensionId} ${shop.signLocation.x}, ${shop.signLocation.y}, ${shop.signLocation.z}: ${formattedError?.stack ?? formattedError}`);
+    return false;
+  }
+}
+
 function decorateShopSign(shop) {
+  let sign;
   try {
     const block = getShopBlock(shop, shop.signLocation);
-    const sign = block?.getComponent("minecraft:sign");
-    if (!sign) return;
-    const [line2, line3] = splitShopName(shop.name);
-    const colorLine = (line) => (line && shop.nameColor ? `${shop.nameColor}${line}§r` : line);
-    const text = ["!ChestShop", colorLine(line2), colorLine(line3), ""].join("\n");
-    sign.setText(text, SignSide.Front);
-    sign.setText(text, SignSide.Back);
-  } catch {
-    // The sign may have been unloaded or removed before this update.
+    sign = block?.getComponent("minecraft:sign");
+  } catch (error) {
+    console.warn(`[Moolah Chest Shop] Could not access ${shop.name}'s sign at ${shop.dimensionId} ${shop.signLocation.x}, ${shop.signLocation.y}, ${shop.signLocation.z}: ${error?.stack ?? error}`);
+    return false;
   }
+  if (!sign) {
+    console.warn(`[Moolah Chest Shop] Could not find ${shop.name}'s sign at ${shop.dimensionId} ${shop.signLocation.x}, ${shop.signLocation.y}, ${shop.signLocation.z}.`);
+    return false;
+  }
+  const [line2, line3] = splitShopName(shop.name);
+  const colorLine = (line) => (line && shop.nameColor ? `${shop.nameColor}${line}§r` : line);
+  const plainText = ["!ChestShop", line2, line3, ""].join("\n");
+  const formattedText = ["!ChestShop", colorLine(line2), colorLine(line3), ""].join("\n");
+  const frontUpdated = setShopSignSideText(
+    sign,
+    SignSide.Front,
+    formattedText,
+    plainText,
+    shop,
+  );
+  const backUpdated = setShopSignSideText(
+    sign,
+    SignSide.Back,
+    formattedText,
+    plainText,
+    shop,
+  );
+  return frontUpdated && backUpdated;
 }
 
 function formatAmount(value) {
@@ -898,9 +936,13 @@ function openShopConfig(player, shopId) {
       defaultQuantity: hasDefaults ? defaultQuantity : undefined,
     };
     saveShop(updated);
-    decorateShopSign(updated);
     normalizeShopItems(updated, false);
     player.sendMessage("Chest Shop settings saved.");
+    system.run(() => {
+      if (!decorateShopSign(updated)) {
+        player.sendMessage("Your Chest Shop settings were saved, but its sign could not be updated. Check the Content Log for details.");
+      }
+    });
     writeAuditLog("chest_shop", "Chest Shop Updated", player, `${updated.name}; defaults ${updated.defaultPrice ? `${updated.defaultPrice} Moolah per ${updated.defaultQuantity}` : "disabled"}.`);
   }).catch(() => player.sendMessage("The Chest Shop settings menu could not be opened."));
 }
