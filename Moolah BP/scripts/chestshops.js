@@ -686,8 +686,8 @@ function normalizeShopItems(shop, promptOwner) {
         const pricedItem = container.getItem(Number(pricedSlot));
         if (
           pricedItem
-          && candidate.signature === itemSignature(pricedItem)
-          && sameBaseItem(pricedItem, item)
+          && candidate.signature === signature
+          && itemSignature(pricedItem) === signature
         ) {
           listing = listingFor(signature, candidate.price, candidate.quantity);
           reusedMatchingPrice = true;
@@ -711,6 +711,8 @@ function normalizeShopItems(shop, promptOwner) {
     if (!listing) {
       listing = listingFor(signature, shop.defaultPrice, shop.defaultQuantity);
       if (promptOwner) promptSlots.push(slot);
+    } else if (listing.unsold && promptOwner) {
+      promptSlots.push(slot);
     }
     nextListings[slot] = { ...listing, signature };
     if (reusedMatchingPrice) nextListings[slot].unsold = false;
@@ -750,8 +752,8 @@ function promptListingSlots(player, shopId, slots, index) {
       !candidateItem
       || !candidateListing
       || candidateListing.unsold
-      || candidateListing.signature !== itemSignature(candidateItem)
-      || !sameBaseItem(candidateItem, item)
+      || candidateListing.signature !== signature
+      || itemSignature(candidateItem) !== signature
     ) continue;
     saveShop({
       ...shop,
