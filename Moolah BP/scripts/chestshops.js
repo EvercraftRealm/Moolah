@@ -378,21 +378,79 @@ function formatShopName(shop) {
 
 function setShopSignSideText(sign, side, formattedText, plainText, shop) {
   try {
-    sign.setText(formattedText, side);
+    sign.setText({ rawtext: [{ text: formattedText }] }, side);
     return true;
-  } catch (formattedError) {
-    if (formattedText !== plainText) {
-      try {
-        sign.setText(plainText, side);
-        console.warn(`[Moolah Chest Shop] ${shop.name}'s sign rejected its selected name color; the plain shop name was applied instead.`);
-        return true;
-      } catch {
-        // Report the original formatted write error below with the shop location.
+  } catch (rawTextError) {
+    try {
+      sign.setText(formattedText, side);
+      return true;
+    } catch (formattedError) {
+      if (formattedText !== plainText) {
+        try {
+          sign.setText(plainText, side);
+          return true;
+        } catch {
+          // Report both scripted write failures below.
+        }
       }
+      console.warn(`[Moolah Chest Shop] Could not update ${shop.name}'s sign at ${shop.dimensionId} ${shop.signLocation.x}, ${shop.signLocation.y}, ${shop.signLocation.z}: ${rawTextError?.stack ?? rawTextError}; fallback: ${formattedError?.stack ?? formattedError}`);
+      return false;
     }
-    console.warn(`[Moolah Chest Shop] Could not update ${shop.name}'s sign at ${shop.dimensionId} ${shop.signLocation.x}, ${shop.signLocation.y}, ${shop.signLocation.z}: ${formattedError?.stack ?? formattedError}`);
+  }
+}
+
+function shopSignSideMatches(sign, side, expectedText) {
+  try {
+    const rawText = sign.getRawText(side);
+    if (rawText?.rawtext) {
+      return rawText.rawtext.map((part) => (
+        typeof part?.text === "string" ? part.text : ""
+      )).join("") === expectedText;
+    }
+    return sign.getText(side) === expectedText;
+  } catch {
     return false;
   }
+}
+
+function verifyShopSign(shop) {
+  try {
+    const block = getShopBlock(shop, shop.signLocation);
+    const sign = block?.getComponent("minecraft:sign");
+    if (!sign) return false;
+    const [line2, line3] = splitShopName(shop.name);
+    const colorLine = (line) => (line && shop.nameColor ? `${shop.nameColor}${line}§r` : line);
+    const plainText = ["!ChestShop", line2, line3, ""].join("\n");
+    const formattedText = ["!ChestShop", colorLine(line2), colorLine(line3), ""].join("\n");
+    const sideMatches = (side) => (
+      shopSignSideMatches(sign, side, formattedText)
+      || shopSignSideMatches(sign, side, plainText)
+    );
+    return sideMatches(SignSide.Front) && sideMatches(SignSide.Back);
+  } catch {
+    return false;
+  }
+}
+
+function updateShopSignWithFeedback(shop, player) {
+  system.run(() => {
+    if (!decorateShopSign(shop)) {
+      player.sendMessage("Moolah saved the Chest Shop, but its sign rejected the update.");
+      return;
+    }
+    system.runTimeout(() => {
+      if (verifyShopSign(shop)) return;
+      if (!decorateShopSign(shop)) {
+        player.sendMessage("Moolah saved the Chest Shop, but its sign rejected the update.");
+        return;
+      }
+      system.runTimeout(() => {
+        if (!verifyShopSign(shop)) {
+          player.sendMessage("Moolah saved the Chest Shop, but the Realm did not retain its sign text.");
+        }
+      }, 20);
+    }, 20);
+  });
 }
 
 function decorateShopSign(shop) {
@@ -938,11 +996,7 @@ function openShopConfig(player, shopId) {
     saveShop(updated);
     normalizeShopItems(updated, false);
     player.sendMessage("Chest Shop settings saved.");
-    system.run(() => {
-      if (!decorateShopSign(updated)) {
-        player.sendMessage("Your Chest Shop settings were saved, but its sign could not be updated. Check the Content Log for details.");
-      }
-    });
+    updateShopSignWithFeedback(updated, player);
     writeAuditLog("chest_shop", "Chest Shop Updated", player, `${updated.name}; defaults ${updated.defaultPrice ? `${updated.defaultPrice} Moolah per ${updated.defaultQuantity}` : "disabled"}.`);
   }).catch(() => player.sendMessage("The Chest Shop settings menu could not be opened."));
 }
@@ -1398,7 +1452,7 @@ function registerShop(player, signBlock, attached, fee) {
   } catch (error) {
     console.error(`[Moolah Chest Shop] Could not add the ${fee} registration fee to the Tax Pool: ${error?.stack ?? error}`);
   }
-  decorateShopSign(shop);
+  updateShopSignWithFeedback(shop, player);
   normalizeShopItems(shop, true);
   player.sendMessage(`${formatShopName(shop)} registered${fee ? ` for ${MINECOIN_GLYPH}${formatAmount(fee)}` : ""}. Right-click the sign to configure it.`);
   writeAuditLog("chest_shop", "Chest Shop Registered", player, `${shop.name}; ${attached.container.size === 54 ? "double chest" : attached.block.typeId}; fee ${fee}.`);
