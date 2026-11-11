@@ -724,6 +724,31 @@ function promptListingSlots(player, shopId, slots, index) {
     promptListingSlots(player, shopId, slots, index + 1);
     return;
   }
+  if (!listing.unsold) {
+    system.run(() => promptListingSlots(player, shopId, slots, index + 1));
+    return;
+  }
+  for (let candidateSlot = 0; candidateSlot < container.size; candidateSlot++) {
+    if (candidateSlot === slot) continue;
+    const candidateItem = container.getItem(candidateSlot);
+    const candidateListing = shop.listings?.[candidateSlot];
+    if (
+      !candidateItem
+      || !candidateListing
+      || candidateListing.unsold
+      || candidateListing.signature !== itemSignature(candidateItem)
+      || !sameBaseItem(candidateItem, item)
+    ) continue;
+    saveShop({
+      ...shop,
+      listings: {
+        ...shop.listings,
+        [slot]: listingFor(signature, candidateListing.price, candidateListing.quantity),
+      },
+    });
+    system.run(() => promptListingSlots(player, shopId, slots, index + 1));
+    return;
+  }
   const form = new ModalFormData()
     .title(`List ${getItemName(item)}`)
     .label(

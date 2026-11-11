@@ -14,6 +14,9 @@
 - Owner stocking sessions now pause hopper reconciliation until the container
   closes, then immediately prompt for every new non-matching item's price and
   quantity with configured defaults prefilled.
+- Chest Shop pricing prompts now re-check current priced stock after registration
+  and every owner stocking session, reusing price and quantity for identical
+  unsold stacks instead of asking again.
 - Chest Shop listings and owner pricing dialogs now distinguish item variants
   with potion effects, enchantments, book details, durability, lore, storage
   contents, underlying item types, and exact owner-facing chest slot numbers.
