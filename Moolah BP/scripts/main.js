@@ -61,7 +61,7 @@ import {
 import { initializeChestShopSystem } from "./chestshops.js";
 
 const MINECOIN_GLYPH = "\uE102";
-const MOOLAH_VERSION = "1.3.3";
+const MOOLAH_VERSION = "1.3.4";
 const MINIMUM_MINECRAFT_VERSION = "1.26.60";
 const SERVER_API_VERSION = "2.10.0";
 const SERVER_UI_API_VERSION = "2.0.0";

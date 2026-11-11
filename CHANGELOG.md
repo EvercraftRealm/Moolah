@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.4 - 2026-11-10
+
+- Fixed identical existing Chest Shop stock being unnecessarily requeued for
+  pricing instead of reusing its exact saved price and purchase quantity.
+- Closing an item-pricing dialog stops the current queue without trapping the
+  owner; genuinely Unsold items requeue after a later stocking session.
+
 ## 1.3.3 - 2026-11-10 (Local Test)
 
 - Added off-by-default Chest Shops for chests, copper chests, double chests,
