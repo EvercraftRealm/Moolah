@@ -1,14 +1,19 @@
 # Changelog
 
+## 1.3.5 - 2026-11-10 (Local Test)
+
+- Changed scripted Chest Shop sign updates to use RawMessage first for Realm
+  compatibility, with string fallbacks, automatic retry, stored-text
+  verification, and player-visible failure feedback.
+
 ## 1.3.4 - 2026-11-10
 
 - Fixed identical existing Chest Shop stock being unnecessarily requeued for
   pricing instead of reusing its exact saved price and purchase quantity.
 - Closing an item-pricing dialog stops the current queue without trapping the
   owner; genuinely Unsold items requeue after a later stocking session.
-- Restored physical Chest Shop sign-name updates with next-tick RawMessage
-  writes, independent front/back handling, string fallbacks, automatic retry,
-  and player-visible Realm verification without relying on a Content Log.
+- Restored physical Chest Shop sign-name updates with next-tick writes,
+  independent front/back handling, visible errors, and plain-text fallback.
 
 ## 1.3.3 - 2026-11-10 (Local Test)
 
