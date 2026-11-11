@@ -680,6 +680,22 @@ function normalizeShopItems(shop, promptOwner) {
       }
     }
 
+    if (listing?.unsold) {
+      for (const [pricedSlot, candidate] of Object.entries(previousListings)) {
+        if (Number(pricedSlot) === slot || candidate.unsold) continue;
+        const pricedItem = container.getItem(Number(pricedSlot));
+        if (
+          pricedItem
+          && candidate.signature === itemSignature(pricedItem)
+          && sameBaseItem(pricedItem, item)
+        ) {
+          listing = listingFor(signature, candidate.price, candidate.quantity);
+          reusedMatchingPrice = true;
+          break;
+        }
+      }
+    }
+
     if (!listing) {
       for (const [pricedSlot, candidate] of Object.entries(nextListings)) {
         if (candidate.unsold) continue;
@@ -695,8 +711,6 @@ function normalizeShopItems(shop, promptOwner) {
     if (!listing) {
       listing = listingFor(signature, shop.defaultPrice, shop.defaultQuantity);
       if (promptOwner) promptSlots.push(slot);
-    } else if (listing.unsold && promptOwner) {
-      promptSlots.push(slot);
     }
     nextListings[slot] = { ...listing, signature };
     if (reusedMatchingPrice) nextListings[slot].unsold = false;
@@ -766,43 +780,44 @@ function promptListingSlots(player, shopId, slots, index) {
   reconciliationLocks.add(shop.id);
   form.show(player).then((response) => {
     reconciliationLocks.delete(shop.id);
-    if (!response.canceled && response.formValues) {
-      const priceText = typeof response.formValues[1] === "string" ? response.formValues[1].trim() : "";
-      const quantityText = typeof response.formValues[2] === "string" ? response.formValues[2].trim() : "";
-      const price = Number(priceText);
-      const quantity = Number(quantityText);
-      const currentShop = shopsById.get(shopId);
-      const currentContainer = currentShop && getShopContainer(currentShop);
-      const current = currentContainer?.getItem(slot);
-      const currentSignature = current && itemSignature(current);
-      if (
-        /^\d+$/.test(priceText)
-        && /^\d+$/.test(quantityText)
-        && Number.isSafeInteger(price)
-        && price > 0
-        && Number.isSafeInteger(quantity)
-        && quantity > 0
-        && quantity <= MAX_DEFAULT_QUANTITY
-        && currentShop
-        && current
-        && currentShop.listings?.[slot]?.signature === currentSignature
-      ) {
-        saveShop({
-          ...currentShop,
-          listings: {
-            ...currentShop.listings,
-            [slot]: listingFor(currentSignature, price, quantity),
-          },
-        });
-      } else if (!response.canceled) {
-        player.sendMessage("The item remains Unsold because its price, quantity, or slot changed.");
-      }
+    if (response.canceled || !response.formValues) {
+      player.sendMessage("Chest Shop pricing stopped. Remaining items will stay Unsold.");
+      return;
+    }
+    const priceText = typeof response.formValues[1] === "string" ? response.formValues[1].trim() : "";
+    const quantityText = typeof response.formValues[2] === "string" ? response.formValues[2].trim() : "";
+    const price = Number(priceText);
+    const quantity = Number(quantityText);
+    const currentShop = shopsById.get(shopId);
+    const currentContainer = currentShop && getShopContainer(currentShop);
+    const current = currentContainer?.getItem(slot);
+    const currentSignature = current && itemSignature(current);
+    if (
+      /^\d+$/.test(priceText)
+      && /^\d+$/.test(quantityText)
+      && Number.isSafeInteger(price)
+      && price > 0
+      && Number.isSafeInteger(quantity)
+      && quantity > 0
+      && quantity <= MAX_DEFAULT_QUANTITY
+      && currentShop
+      && current
+      && currentShop.listings?.[slot]?.signature === currentSignature
+    ) {
+      saveShop({
+        ...currentShop,
+        listings: {
+          ...currentShop.listings,
+          [slot]: listingFor(currentSignature, price, quantity),
+        },
+      });
+    } else {
+      player.sendMessage("The item remains Unsold because its price, quantity, or slot changed.");
     }
     system.run(() => promptListingSlots(player, shopId, slots, index + 1));
   }).catch(() => {
     reconciliationLocks.delete(shop.id);
-    player.sendMessage("The item remains Unsold because the listing menu could not be opened.");
-    system.run(() => promptListingSlots(player, shopId, slots, index + 1));
+    player.sendMessage("Chest Shop pricing stopped because the listing menu could not be opened. Remaining items will stay Unsold.");
   });
 }
 

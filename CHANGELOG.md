@@ -17,6 +17,8 @@
 - Chest Shop pricing prompts now re-check current priced stock after registration
   and every owner stocking session, reusing price and quantity for identical
   unsold stacks instead of asking again.
+- Closing an item-pricing dialog now stops the entire remaining pricing queue;
+  existing Unsold items are not repeatedly prompted on every shop close.
 - Chest Shop listings and owner pricing dialogs now distinguish item variants
   with potion effects, enchantments, book details, durability, lore, storage
   contents, underlying item types, and exact owner-facing chest slot numbers.
