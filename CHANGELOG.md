@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 - 2026-11-13
+
+- Added the off-by-default Chest Shop system for supported chests and barrels,
+  including registration fees, sales tax, owner configuration, safe stock
+  pricing, buyer catalogs, multi-set purchases, seller Inbox proceeds, claim
+  integration, protection, and dedicated audit logs.
+- Added shop-name colors, custom buyer descriptions, item-variant details,
+  grouped stock listings, chest sound feedback, and parent-menu navigation.
+- Added Realm-oriented RawMessage sign updates with retry, verification, and
+  player-visible failure feedback.
+- Updated both pack icons with an Evercraft Green frame and dark branded banner.
+
 ## 1.3.5 - 2026-11-10 (Local Test)
 
 - Changed scripted Chest Shop sign updates to use RawMessage first for Realm
