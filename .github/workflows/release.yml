@@ -19,8 +19,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $behaviorManifest = Get-Content -Raw -LiteralPath './Moolah BP/manifest.json' | ConvertFrom-Json
-          $resourceManifest = Get-Content -Raw -LiteralPath './Moolah RP/manifest.json' | ConvertFrom-Json
+          $behaviorPack = './Moolah BP'
+          $resourcePack = './Moolah RP'
+          $behaviorManifest = Get-Content -Raw -LiteralPath "$behaviorPack/manifest.json" | ConvertFrom-Json
+          $resourceManifest = Get-Content -Raw -LiteralPath "$resourcePack/manifest.json" | ConvertFrom-Json
           $version = $behaviorManifest.header.version -join '.'
           $resourceVersion = $resourceManifest.header.version -join '.'
           if ($resourceVersion -ne $version) {
@@ -30,16 +32,25 @@ jobs:
             throw "Tag $env:GITHUB_REF_NAME does not match manifest version $version"
           }
 
-          New-Item -ItemType Directory -Force -Path './dist','./release-temp' | Out-Null
-          Compress-Archive -Path './Moolah BP/*' -DestinationPath './release-temp/Moolah-BP.zip' -CompressionLevel Optimal
-          Compress-Archive -Path './Moolah RP/*' -DestinationPath './release-temp/Moolah-RP.zip' -CompressionLevel Optimal
-          Move-Item './release-temp/Moolah-BP.zip' './release-temp/Moolah-BP.mcpack'
-          Move-Item './release-temp/Moolah-RP.zip' './release-temp/Moolah-RP.mcpack'
-          Compress-Archive -Path './release-temp/*.mcpack' -DestinationPath "./dist/Moolah-$version.zip" -CompressionLevel Optimal
-          Move-Item "./dist/Moolah-$version.zip" "./dist/Moolah-$version.mcaddon"
+          New-Item -ItemType Directory -Force -Path './dist', './release-temp' | Out-Null
+          Compress-Archive -Path "$behaviorPack/*" -DestinationPath './release-temp/behavior.zip' -CompressionLevel Optimal
+          Compress-Archive -Path "$resourcePack/*" -DestinationPath './release-temp/resource.zip' -CompressionLevel Optimal
+          Move-Item './release-temp/behavior.zip' './release-temp/Moolah-BP.mcpack'
+          Move-Item './release-temp/resource.zip' './release-temp/Moolah-RP.mcpack'
+
+          $artifactName = "Moolah-$version.mcaddon"
+          $archivePath = "./dist/Moolah-$version.zip"
+          $artifactPath = "./dist/$artifactName"
+          Compress-Archive -Path './release-temp/*.mcpack' -DestinationPath $archivePath -CompressionLevel Optimal
+          Move-Item -LiteralPath $archivePath -Destination $artifactPath
+
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $artifactPath).Hash.ToLowerInvariant()
+          "$hash  $artifactName" | Set-Content -NoNewline -Encoding ascii -LiteralPath "$artifactPath.sha256"
 
       - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME ./dist/*.mcaddon --generate-notes --title "Moolah $env:GITHUB_REF_NAME"
+        run: |
+          $artifact = Get-ChildItem -LiteralPath './dist' -Filter '*.mcaddon' | Select-Object -First 1
+          gh release create $env:GITHUB_REF_NAME $artifact.FullName "$($artifact.FullName).sha256" --generate-notes --title "Moolah $env:GITHUB_REF_NAME"
