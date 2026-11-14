@@ -13,17 +13,30 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Validate tag and build add-on
+      - name: Validate and package add-on
         shell: pwsh
         run: |
-          $manifest = Get-Content -Raw -LiteralPath './Moolah BP/manifest.json' | ConvertFrom-Json
-          $version = $manifest.header.version -join '.'
+          $ErrorActionPreference = 'Stop'
+          $behaviorManifest = Get-Content -Raw -LiteralPath './Moolah BP/manifest.json' | ConvertFrom-Json
+          $resourceManifest = Get-Content -Raw -LiteralPath './Moolah RP/manifest.json' | ConvertFrom-Json
+          $version = $behaviorManifest.header.version -join '.'
+          $resourceVersion = $resourceManifest.header.version -join '.'
+          if ($resourceVersion -ne $version) {
+            throw "Pack versions do not match: behavior=$version, resource=$resourceVersion"
+          }
           if ($env:GITHUB_REF_NAME -ne "v$version") {
             throw "Tag $env:GITHUB_REF_NAME does not match manifest version $version"
           }
-          ./scripts/build-release.ps1
+
+          New-Item -ItemType Directory -Force -Path './dist','./release-temp' | Out-Null
+          Compress-Archive -Path './Moolah BP/*' -DestinationPath './release-temp/Moolah-BP.zip' -CompressionLevel Optimal
+          Compress-Archive -Path './Moolah RP/*' -DestinationPath './release-temp/Moolah-RP.zip' -CompressionLevel Optimal
+          Move-Item './release-temp/Moolah-BP.zip' './release-temp/Moolah-BP.mcpack'
+          Move-Item './release-temp/Moolah-RP.zip' './release-temp/Moolah-RP.mcpack'
+          Compress-Archive -Path './release-temp/*.mcpack' -DestinationPath "./dist/Moolah-$version.zip" -CompressionLevel Optimal
+          Move-Item "./dist/Moolah-$version.zip" "./dist/Moolah-$version.mcaddon"
 
       - name: Publish GitHub release
         shell: pwsh
